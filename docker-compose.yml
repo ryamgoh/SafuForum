@@ -1,0 +1,56 @@
+services:
+  # SeaweedFS Deployment
+  # --------------------------------------------------------------
+  # Master node
+  seaweed-master:
+    image: chrislusf/seaweedfs:latest
+    ports:
+      - "9333:9333" # SeaweedFS master HTTP port
+      - "19333:19333" # SeaweedFS master gRPC port
+    command: "master -port=9333 -ip=seaweed-master" # Specify master's IP for internal communication
+    volumes:
+      - master_data:/data # Persistent storage for master data
+
+  # Volume node
+  seaweed-volume:
+    image: chrislusf/seaweedfs:latest
+    ports:
+      - "8080:8080" # SeaweedFS volume HTTP port
+    command: "volume -mserver=seaweed-master:9333 -port=8080 -ip=seaweed-volume" # Connects to master
+    volumes:
+      - volume_data:/data # Persistent storage for volume data
+    depends_on:
+      - seaweed-master # Ensures master starts before volume
+
+  seaweed-filer:
+    image: chrislusf/seaweedfs:latest
+    command: ["filer", "-master=seaweed-master:9333", "-ip=seaweed-filer"]
+    depends_on:
+      - seaweed-master
+      - seaweed-volume
+    ports:
+      - "8888:8888" # Filer UI and API port
+      - "18888:18888" # Filer gRPC port
+    
+
+  seaweed-s3:
+    image: chrislusf/seaweedfs:latest  # See Fix 2 below about this image
+    container_name: seaweed-s3
+    restart: on-failure
+    # ADDED: -ip.bind=0.0.0.0
+    command: "s3 -port=8333 -filer=seaweed-filer:8888 -ip.bind=0.0.0.0"
+    environment:
+      S3_ACCESS_KEY: dev
+      S3_SECRET_KEY: dev
+    ports:
+      - "8333:8333"
+    depends_on:
+      - seaweed-filer
+
+volumes:
+  master_data:
+  volume_data:
+
+networks:
+  default:
+    name: safuforum-net
