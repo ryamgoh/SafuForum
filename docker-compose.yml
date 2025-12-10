@@ -38,12 +38,11 @@ services:
     container_name: seaweed-s3
     restart: on-failure
     # ADDED: -ip.bind=0.0.0.0
-    command: "s3 -port=8333 -filer=seaweed-filer:8888 -ip.bind=0.0.0.0"
-    environment:
-      S3_ACCESS_KEY: dev
-      S3_SECRET_KEY: dev
+    command: "s3 -port=8333 -filer=seaweed-filer:8888 -ip.bind=0.0.0.0 -config=/config/s3_identity.json"
     ports:
       - "8333:8333"
+    volumes:
+      - ./s3_identity.json:/config/s3_identity.json:ro
     depends_on:
       - seaweed-filer
 
