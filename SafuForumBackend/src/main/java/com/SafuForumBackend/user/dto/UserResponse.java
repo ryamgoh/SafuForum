@@ -3,5 +3,6 @@ package com.SafuForumBackend.user.dto;
 public record UserResponse(
         Long id,
         String username,
-        String displayName
+        String displayName,
+        Integer reputation
 ) {}

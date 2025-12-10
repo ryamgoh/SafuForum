@@ -1,8 +1,12 @@
-package com.SafuForumBackend.user;
+package com.SafuForumBackend.user.controller;
 
 import com.SafuForumBackend.user.dto.UserResponse;
+import com.SafuForumBackend.user.entity.User;
+import com.SafuForumBackend.user.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,8 +23,16 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserResponse> getCurrentUser() {
-        // Will implement with auth
-        return ResponseEntity.ok(null);
+    public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal User user) {
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        UserResponse response = new UserResponse(
+                user.getId(),
+                user.getUsername(),
+                user.getDisplayName(),
+                user.getReputation()
+        );
+        return ResponseEntity.ok(response);
     }
 }
