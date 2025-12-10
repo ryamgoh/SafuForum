@@ -1,5 +1,7 @@
 package com.SafuForumBackend.user;
 
+import com.SafuForumBackend.user.repository.UserRepository;
+import com.SafuForumBackend.user.entity.User;
 import com.SafuForumBackend.user.dto.UserResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
