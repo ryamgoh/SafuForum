@@ -1,0 +1,18 @@
+[project]
+name = "text-moderation"
+version = "0.1.0"
+description = "Composite service for SafuForum text moderation."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aio-pika>=9.5.8",
+    "aioboto3>=15.5.0",
+    "fastapi[standard]>=0.124.2",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "pyjwt>=2.10.1",
+    "redis>=7.1.0",
+    "uvicorn[standard]>=0.38.0",
+]
+[tool.uv]
+package = true
