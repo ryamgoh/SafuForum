@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     # Database
     postgres_host: str = Field("0.0.0.0", alias="POSTGRES_HOST")
     postgres_port: str = Field("5432", alias="POSTGRES_PORT")
-    postgres_user: str = Field("user", alias="POSTGRES_USER")
-    postgres_password: str = Field("user", alias="POSTGRES_PASSWORD")
-    postgres_db: str = Field("user", alias="POSTGRES_DB")
+    postgres_user: str = Field("app", alias="POSTGRES_USER")
+    postgres_password: str = Field("app", alias="POSTGRES_PASSWORD")
+    postgres_db: str = Field("postgres", alias="POSTGRES_DB")
 
     # Messaging
     # rabbitmq_url: str = Field(..., alias="RABBITMQ_URL")

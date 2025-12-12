@@ -1,0 +1,69 @@
+Project "Moderation Orchestrator" {
+  database_type: "PostgreSQL"
+}
+
+Enum status { 
+  pending 
+  completed
+  failed
+  timed_out 
+}
+
+Enum verdict {
+  allow
+  block
+  review
+  error
+}
+
+Table moderation_jobs {
+  id uuid [pk, note: "Correlation/job id carried in inbound/outbound events"]
+  content_id text [note: "Opaque content identifier from ContentService"]
+  submitter_id text [note: "Actor who created the content; may be a user id"]
+  status status [not null, default: 'pending']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: "Entry point for every moderation job; tracks lifecycle and ownership."
+}
+
+Table text_data {
+  job_id uuid [pk, ref: > moderation_jobs.id]
+  text_excerpt text [note: "Stored text or excerpt for moderation"]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table image_data {
+  job_id uuid [pk, ref: > moderation_jobs.id]
+  image_uri text [not null, note: "Reference to image object (e.g., S3/Seaweed key)"]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table job_tasks {
+  id bigserial [pk]
+  job_id uuid [not null, ref: > moderation_jobs.id]
+  service_id varchar(128) [not null, note: "Logical moderator/analyzer identifier"]
+  status status [not null, default: 'pending']
+  payload jsonb [note: "Raw event payload from the service (aligns to envelope payload)"]
+  started_at timestamptz [default: `now()`]
+  completed_at timestamptz
+
+  Note: "One row per configured service (moderator) for a job. Insert rows at job start; update as events arrive."
+
+  Indexes {
+    (job_id, service_id) [name: "uq_job_tasks_job_service", unique]
+    (job_id, status)
+  }
+}
+
+Table moderation_decisions {
+  job_id uuid [pk, ref: > moderation_jobs.id]
+  final_verdict verdict [not null]
+  final_score numeric(5,4) [note: "Composite score derived from tasks/policy"]
+  rationale text [note: "Human-readable explanation of the decision"]
+  timed_out bool [not null, default: false, note: "True if any task exceeded its SLA"]
+  task_count int [note: "How many task responses were considered"]
+  decided_at timestamptz [not null, default: `now()`]
+
+  Note: "Aggregated decision persisted for audits and replay."
+}

@@ -135,10 +135,6 @@ services:
     environment:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       REDIS_URL: redis://redis:6379/1
-      S3_ENDPOINT: http://seaweed-s3:8333
-      S3_BUCKET: content
-      S3_ACCESS_KEY: dev
-      S3_SECRET_KEY: dev
     depends_on:
       - rabbitmq
       # - redis
