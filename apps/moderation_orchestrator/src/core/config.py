@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     refresh_token_rotation: bool = Field(True, alias="REFRESH_TOKEN_ROTATION")
 
     # Database
+    postgres_database_url: str = Field("", alias="POSTGRES_DATABASE_URL")
     postgres_host: str = Field("0.0.0.0", alias="POSTGRES_HOST")
     postgres_port: str = Field("5432", alias="POSTGRES_PORT")
     postgres_user: str = Field("app", alias="POSTGRES_USER")

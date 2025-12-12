@@ -35,7 +35,7 @@ async def start_consumer(queue_name: str, handler: Callable[[Dict], Awaitable[No
 
 async def publish_task_request(
     correlation_id: str,
-    service_id: str,
+    event_name: str,
     payload: Dict,
 ):
     """Publish a moderation request to a service (text or image).
@@ -47,8 +47,8 @@ async def publish_task_request(
         correlation_id=correlation_id,
         service_id="orchestrator",
         payload={
-            "job_id": correlation_id,
-            "task": {"service_id": service_id},
+            "correlating_id": correlation_id,
+            "task": {"event_name": event_name},
             "content": payload.get("content", {}),
         },
     )
@@ -62,14 +62,12 @@ async def publish_completed(original_event: Dict, decision: Dict):
     """
     envelope = _envelope(
         EVENT_TYPE_JOB_COMPLETED,
-        correlation_id=decision["job_id"],
+        correlation_id=decision["correlating_id"],
         service_id="orchestrator",
         payload={
-            "job_id": decision["job_id"],
+            "correlating_id": decision["correlating_id"],
             "final_verdict": decision["verdict"],
-            "final_score": decision.get("score"),
             "timed_out": decision.get("timed_out", False),
-            "task_count": decision.get("task_count"),
             "responses": decision.get("responses"),
         },
     )

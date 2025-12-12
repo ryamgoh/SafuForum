@@ -31,14 +31,14 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - Content-based routing:
   - Inspect the incoming content. If it has text, fan out to text services; if it has an image, fan out to image services; if both, fan out to both sets.
 - Normalized content storage:
-  - `moderation_jobs` holds core metadata (ids/status/timestamps).
-  - `text_data` (1:1 via `job_id`) holds text content/excerpt.
-  - `image_data` (1:1 via `job_id`) holds the image URI/object key.
+  - `moderation_jobs` holds core metadata (correlating_id/status/timestamps).
+  - `text_data` (1:1 via `correlating_id`) holds text content/excerpt.
+  - `image_data` (1:1 via `correlating_id`) holds the image URI/object key.
 - Orchestrator fan-out:
-  - For each required service (e.g., `Deepfake_V1`, `TextSafe_V2`), insert a `job_tasks` row and publish a request message carrying `correlation_id = job_id` and `service_id`.
+  - For each required service (e.g., `Deepfake_V1`, `TextSafe_V2`), insert a `job_tasks` row and publish a request message carrying `correlation_id = correlating_id` and `event_name`.
   - Use routing keys like `moderation.text.requested` / `moderation.image.requested`, pointing at each service’s queue/exchange.
 - Moderators/services:
-  - Consume their request event, run the model, and publish a completion event including `service_id`, `verdict`, `score`, `details` (in payload), and the same `correlation_id`.
+  - Consume their request event, run the model, and publish a completion event including `event_name`, `verdict`, `score`, `details` (in payload), and the same `correlation_id`.
 - Aggregation (in this service):
   - On each completion event, update the matching `job_tasks` row (store the raw response payload). When all tasks reach a terminal state (or an early block/timeout policy triggers), combine outcomes into a final `allow`/`block`/`review`.
   - Persist the decision (see `schema.dbml`) and emit `Moderation.Job.Completed` back to ContentService (see `events.md`).
