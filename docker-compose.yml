@@ -1,43 +1,132 @@
+version: '3.8'
+
 services:
+  # Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: safuforum-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: safuforum
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - safuforum-net
+
+  # Message Broker
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: safuforum-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - safuforum-net
+
+  # Backend (Spring Boot)
+  backend:
+    build:
+      context: ./SafuForumBackend
+      dockerfile: Dockerfile
+    container_name: safuforum-backend
+    ports:
+      - "8081:8081"  # Changed from 8080 (SeaweedFS volume uses 8080)
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/safuforum
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      SERVER_PORT: 8081
+    env_file:
+      - ./SafuForumBackend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - safuforum-net
+
+  # Frontend (React)
+  frontend:
+    build:
+      context: ./SafuForumFrontend
+      dockerfile: Dockerfile
+    container_name: safuforum-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - safuforum-net
+
   # SeaweedFS Deployment
   # --------------------------------------------------------------
   # Master node
   seaweed-master:
     image: chrislusf/seaweedfs:latest
+    container_name: seaweed-master
     ports:
-      - "9333:9333" # SeaweedFS master HTTP port
-      - "19333:19333" # SeaweedFS master gRPC port
-    command: "master -port=9333 -ip=seaweed-master" # Specify master's IP for internal communication
+      - "9333:9333"   # Master HTTP port
+      - "19333:19333" # Master gRPC port
+    command: "master -port=9333 -ip=seaweed-master"
     volumes:
-      - master_data:/data # Persistent storage for master data
+      - master_data:/data
+    networks:
+      - safuforum-net
 
   # Volume node
   seaweed-volume:
     image: chrislusf/seaweedfs:latest
+    container_name: seaweed-volume
     ports:
-      - "8080:8080" # SeaweedFS volume HTTP port
-    command: "volume -mserver=seaweed-master:9333 -port=8080 -ip=seaweed-volume" # Connects to master
+      - "8080:8080" # Volume HTTP port
+    command: "volume -mserver=seaweed-master:9333 -port=8080 -ip=seaweed-volume"
     volumes:
-      - volume_data:/data # Persistent storage for volume data
+      - volume_data:/data
     depends_on:
-      - seaweed-master # Ensures master starts before volume
+      - seaweed-master
+    networks:
+      - safuforum-net
 
+  # Filer
   seaweed-filer:
     image: chrislusf/seaweedfs:latest
+    container_name: seaweed-filer
     command: ["filer", "-master=seaweed-master:9333", "-ip=seaweed-filer"]
     depends_on:
       - seaweed-master
       - seaweed-volume
     ports:
-      - "8888:8888" # Filer UI and API port
+      - "8888:8888"   # Filer UI and API port
       - "18888:18888" # Filer gRPC port
-    
+    networks:
+      - safuforum-net
 
+  # S3 Gateway
   seaweed-s3:
-    image: chrislusf/seaweedfs:latest  # See Fix 2 below about this image
+    image: chrislusf/seaweedfs:latest
     container_name: seaweed-s3
     restart: on-failure
-    # ADDED: -ip.bind=0.0.0.0
     command: "s3 -port=8333 -filer=seaweed-filer:8888 -ip.bind=0.0.0.0 -config=/config/s3_identity.json"
     ports:
       - "8333:8333"
@@ -45,11 +134,14 @@ services:
       - ./s3_identity.json:/config/s3_identity.json:ro
     depends_on:
       - seaweed-filer
+    networks:
+      - safuforum-net
 
 volumes:
+  postgres_data:
   master_data:
   volume_data:
 
 networks:
-  default:
-    name: safuforum-net
+  safuforum-net:
+    driver: bridge
