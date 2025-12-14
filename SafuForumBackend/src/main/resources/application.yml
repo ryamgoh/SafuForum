@@ -44,7 +44,7 @@ spring:
             user-name-attribute: sub
 
 server:
-  port: 8080
+  port: 8081
 
 jwt:
   secret: ${JWT_SECRET}

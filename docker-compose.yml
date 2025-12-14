@@ -46,7 +46,7 @@ services:
       dockerfile: Dockerfile
     container_name: safuforum-backend
     ports:
-      - "8081:8081"  # Changed from 8080 (SeaweedFS volume uses 8080)
+      - "8081:8081"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/safuforum
       SPRING_DATASOURCE_USERNAME: postgres
@@ -66,28 +66,27 @@ services:
     networks:
       - safuforum-net
 
-  # Frontend (React)
+  # Frontend (Next.js)
   frontend:
     build:
       context: ./SafuForumFrontend
       dockerfile: Dockerfile
     container_name: safuforum-frontend
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - backend
     networks:
       - safuforum-net
 
   # SeaweedFS Deployment
-  # --------------------------------------------------------------
   # Master node
   seaweed-master:
     image: chrislusf/seaweedfs:latest
     container_name: seaweed-master
     ports:
-      - "9333:9333"   # Master HTTP port
-      - "19333:19333" # Master gRPC port
+      - "9333:9333"
+      - "19333:19333"
     command: "master -port=9333 -ip=seaweed-master"
     volumes:
       - master_data:/data
@@ -99,7 +98,7 @@ services:
     image: chrislusf/seaweedfs:latest
     container_name: seaweed-volume
     ports:
-      - "8080:8080" # Volume HTTP port
+      - "8080:8080"
     command: "volume -mserver=seaweed-master:9333 -port=8080 -ip=seaweed-volume"
     volumes:
       - volume_data:/data
@@ -117,8 +116,8 @@ services:
       - seaweed-master
       - seaweed-volume
     ports:
-      - "8888:8888"   # Filer UI and API port
-      - "18888:18888" # Filer gRPC port
+      - "8888:8888"
+      - "18888:18888"
     networks:
       - safuforum-net
 

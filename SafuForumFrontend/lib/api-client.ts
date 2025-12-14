@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { tokenRefreshService } from './token-refresh-service';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

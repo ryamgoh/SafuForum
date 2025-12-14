@@ -7,7 +7,7 @@ export interface User {
   avatarUrl?: string;
   bio?: string;
   reputation: number;
-  role: 'USER' | 'MODERATOR' | 'ADMIN';
+  role: 'USER' | 'MODERATOR' | 'ADMIN' | 'TRUSTED_USER';
   oauthProvider?: string;
   oauthProviderId?: string;
   createdAt: string;
@@ -20,7 +20,7 @@ export interface Post {
   title: string;
   content: string;
   authorId: number;
-  author?: User;
+  author: User;
   viewCount: number;
   commentCount: number;
   tags?: Tag[];
@@ -47,7 +47,7 @@ export interface Comment {
   content: string;
   postId: number;
   authorId: number;
-  author?: User;
+  author: User;
   parentCommentId?: number;
   replies?: Comment[];
   createdAt: string;
@@ -82,9 +82,8 @@ export interface Tag {
   id: number;
   name: string;
   slug: string;
-  description?: string;
+  color: string;
   postCount: number;
-  createdAt: string;
 }
 
 // Auth types

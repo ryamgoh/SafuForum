@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Post } from '@/lib/types';
+import { Post, Comment, VoteScore, User } from '@/lib/types';
 import { postsApi, commentsApi, votesApi, usersApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowUp, ArrowDown, MessageSquare, Edit, Trash2, X } from 'lucide-react';
@@ -15,12 +15,12 @@ export default function PostDetail() {
   const params = useParams();
   const router = useRouter();
   const [post, setPost] = useState<Post | null>(null);
-  const [comments, setComments] = useState([]);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentContent, setCommentContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [postVoteScore, setPostVoteScore] = useState({ score: 0, userVote: null });
-  const [currentUser, setCurrentUser] = useState(null);
+  const [postVoteScore, setPostVoteScore] = useState<VoteScore>({ score: 0, userVote: null });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -183,9 +183,9 @@ export default function PostDetail() {
     }
   };
 
-  const canEdit = currentUser && post && currentUser.id === post.author.id;
+  const canEdit = currentUser && post && currentUser.id === post.authorId;
   const canDelete = currentUser && post && (
-    currentUser.id === post.author.id ||
+    currentUser.id === post.authorId ||
     currentUser.role === 'MODERATOR' ||
     currentUser.role === 'ADMIN'
   );

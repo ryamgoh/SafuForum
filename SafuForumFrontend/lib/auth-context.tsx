@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Login function - redirects to OAuth
   const login = useCallback(() => {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
     window.location.href = `${API_BASE_URL}/oauth2/authorization/google`;
   }, []);
 
