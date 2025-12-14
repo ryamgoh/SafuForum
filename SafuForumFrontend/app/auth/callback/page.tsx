@@ -2,6 +2,8 @@
 
 import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { tokenRefreshService } from '@/lib/token-refresh-service';
+import toast from 'react-hot-toast';
 
 function CallbackContent() {
   const searchParams = useSearchParams();
@@ -12,14 +14,27 @@ function CallbackContent() {
     const refreshToken = searchParams.get('refreshToken');
 
     if (accessToken && refreshToken) {
-      // Store tokens in localStorage
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
+      try {
+        // Store tokens in localStorage
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', refreshToken);
 
-      // Redirect to home page
-      router.push('/');
+        // Start proactive token refresh monitoring
+        tokenRefreshService.startRefreshMonitoring();
+
+        // Show success message
+        toast.success('Successfully logged in!');
+
+        // Redirect to home page
+        router.push('/');
+      } catch (error) {
+        console.error('Failed to store tokens:', error);
+        toast.error('Authentication failed. Please try again.');
+        router.push('/?error=storage_failed');
+      }
     } else {
       console.error('No tokens received from OAuth callback');
+      toast.error('Authentication failed. No tokens received.');
       // Redirect to home with error
       router.push('/?error=auth_failed');
     }

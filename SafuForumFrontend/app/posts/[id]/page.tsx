@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Post } from '@/types';
+import { Post } from '@/lib/types';
 import { postsApi, commentsApi, votesApi, usersApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowUp, ArrowDown, MessageSquare, Edit, Trash2, X } from 'lucide-react';

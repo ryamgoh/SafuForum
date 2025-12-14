@@ -1,6 +1,6 @@
 'use client';
 
-import { Comment } from '@/types';
+import { Comment } from '@/lib/types';
 import CommentItem from './CommentItem';
 
 interface CommentListProps {

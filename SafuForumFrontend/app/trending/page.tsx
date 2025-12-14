@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Post } from '@/types';
+import { Post } from '@/lib/types';
 import { postsApi } from '@/lib/api';
 import PostCard from '@/components/PostCard';
 import { TrendingUp } from 'lucide-react';

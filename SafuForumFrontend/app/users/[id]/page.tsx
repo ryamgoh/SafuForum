@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { User, Post } from '@/types';
+import { User, Post } from '@/lib/types';
 import { usersApi, postsApi } from '@/lib/api';
 import PostCard from '@/components/PostCard';
 import { Calendar, Award, MessageSquare, FileText } from 'lucide-react';

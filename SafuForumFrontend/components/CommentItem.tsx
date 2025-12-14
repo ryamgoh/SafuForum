@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Comment } from '@/types';
+import { Comment } from '@/lib/types';
 import { votesApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowUp, ArrowDown, MessageSquare, ChevronDown, ChevronRight } from 'lucide-react';

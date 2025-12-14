@@ -4,9 +4,8 @@ import Image from 'next/image';
 import { Home, TrendingUp, Tag, Users, Settings, LogOut, Plus, LogIn } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { usersApi } from '@/lib/api';
-import { User } from '@/types';
+import { useAuth } from '@/lib/auth-context';
+import { User } from '@/lib/types';
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
@@ -16,35 +15,7 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchCurrentUser();
-  }, []);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await usersApi.getCurrentUser();
-      setCurrentUser(response.data);
-    } catch (error) {
-      console.log('User not logged in');
-      setCurrentUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    setCurrentUser(null);
-    window.location.href = '/';
-  };
-
-  const handleLogin = () => {
-    window.location.href = 'http://localhost:8080/oauth2/authorization/google';
-  };
+  const { user: currentUser, loading, login, logout } = useAuth();
 
   const getUserInitials = (user: User) => {
     if (user.displayName) {
@@ -141,7 +112,7 @@ export default function Sidebar() {
                   </p>
                 </div>
                 <button
-                                onClick={handleLogout}
+                                onClick={logout}
                                 className="flex items-center justify-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                                 title="Logout"
                               >
@@ -157,7 +128,7 @@ export default function Sidebar() {
               Login to create posts and interact
             </p>
             <button
-              onClick={handleLogin}
+              onClick={login}
               className="flex items-center justify-center space-x-2 w-full bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-3 rounded-lg transition-colors"
             >
               <LogIn className="w-5 h-5" />

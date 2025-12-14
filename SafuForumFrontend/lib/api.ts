@@ -10,7 +10,10 @@ import {
   UpdateCommentRequest,
   VoteRequest,
   PaginatedResponse,
-} from '@/types';
+  Tag,
+  AuthResponse,
+  RefreshTokenRequest,
+} from './types';
 
 // Posts API
 export const postsApi = {

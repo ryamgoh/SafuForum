@@ -4,16 +4,10 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Tag as TagIcon, Hash } from 'lucide-react';
 import { tagsApi, postsApi } from '@/lib/api';
-import { Post } from '@/types';
+import { Post, Tag } from '@/lib/types';
 import PostCard from '@/components/PostCard';
 import toast from 'react-hot-toast';
 
-interface Tag {
-  id: number;
-  name: string;
-  slug: string;
-  color: string;
-}
 
 export default function TagDetailPage() {
   const params = useParams();
