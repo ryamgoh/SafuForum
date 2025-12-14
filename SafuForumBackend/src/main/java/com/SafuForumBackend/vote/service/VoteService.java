@@ -5,11 +5,14 @@ import com.SafuForumBackend.comment.repository.CommentRepository;
 import com.SafuForumBackend.post.entity.Post;
 import com.SafuForumBackend.post.repository.PostRepository;
 import com.SafuForumBackend.user.entity.User;
+import com.SafuForumBackend.vote.constants.VoteConstants;
 import com.SafuForumBackend.vote.dto.VoteRequest;
 import com.SafuForumBackend.vote.dto.VoteResponse;
 import com.SafuForumBackend.vote.dto.VoteScoreResponse;
 import com.SafuForumBackend.vote.entity.Vote;
+import com.SafuForumBackend.vote.event.VoteEvent;
 import com.SafuForumBackend.vote.repository.VoteRepository;
+import com.SafuForumBackend.vote.enums.EntityType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +26,7 @@ public class VoteService {
     private final VoteRepository voteRepository;
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
+    private final VoteEventPublisher voteEventPublisher;
 
     @Transactional
     public VoteResponse vote(VoteRequest request, User currentUser) {
@@ -43,7 +47,7 @@ public class VoteService {
             vote = voteOnComment(request.getCommentId(), request.getVoteType(), currentUser);
         }
 
-        return convertToResponse(vote);
+        return vote != null ? convertToResponse(vote) : null;
     }
 
     @Transactional
@@ -103,11 +107,24 @@ public class VoteService {
             if (vote.getVoteType().equals(voteType)) {
                 // Same vote - remove it (toggle off)
                 voteRepository.delete(vote);
-                return vote;
+                voteEventPublisher.sendMessage(new VoteEvent(
+                        post.getAuthor().getId(),
+                        postId,
+                        EntityType.POST,
+                        voteType == 1 ? -VoteConstants.UPVOTE_POST : -VoteConstants.DOWNVOTE_POST
+                ));
+                return null;
             } else {
                 // Different vote - update it
                 vote.setVoteType(voteType);
-                return voteRepository.save(vote);
+                Vote savedVote = voteRepository.save(vote);
+                voteEventPublisher.sendMessage(new VoteEvent(
+                        post.getAuthor().getId(),
+                        postId,
+                        EntityType.POST,
+                        voteType == 1 ? VoteConstants.UPVOTE_POST * 2 : VoteConstants.DOWNVOTE_POST * 2
+                ));
+                return savedVote;
             }
         } else {
             // New vote
@@ -116,7 +133,15 @@ public class VoteService {
                     .post(post)
                     .voteType(voteType)
                     .build();
-            return voteRepository.save(vote);
+            Vote savedVote = voteRepository.save(vote);
+
+            voteEventPublisher.sendMessage(new VoteEvent(
+                    post.getAuthor().getId(),
+                    postId,
+                    EntityType.POST,
+                    voteType == 1 ? VoteConstants.UPVOTE_POST : VoteConstants.DOWNVOTE_POST
+            ));
+            return savedVote;
         }
     }
 
@@ -136,11 +161,24 @@ public class VoteService {
             if (vote.getVoteType().equals(voteType)) {
                 // Same vote - remove it (toggle off)
                 voteRepository.delete(vote);
-                return vote;
+                voteEventPublisher.sendMessage(new VoteEvent(
+                        comment.getAuthor().getId(),
+                        commentId,
+                        EntityType.COMMENT,
+                        voteType == 1 ? -VoteConstants.UPVOTE_COMMENT : -VoteConstants.DOWNVOTE_COMMENT
+                ));
+                return null;
             } else {
                 // Different vote - update it
                 vote.setVoteType(voteType);
-                return voteRepository.save(vote);
+                Vote savedVote = voteRepository.save(vote);
+                voteEventPublisher.sendMessage(new VoteEvent(
+                        comment.getAuthor().getId(),
+                        commentId,
+                        EntityType.COMMENT,
+                        voteType == 1 ? VoteConstants.UPVOTE_COMMENT * 2 : VoteConstants.DOWNVOTE_COMMENT * 2
+                ));
+                return savedVote;
             }
         } else {
             // New vote
@@ -149,7 +187,14 @@ public class VoteService {
                     .comment(comment)
                     .voteType(voteType)
                     .build();
-            return voteRepository.save(vote);
+            Vote savedVote = voteRepository.save(vote);
+            voteEventPublisher.sendMessage(new VoteEvent(
+                    comment.getAuthor().getId(),
+                    commentId,
+                    EntityType.COMMENT,
+                    voteType == 1 ? VoteConstants.UPVOTE_COMMENT : VoteConstants.DOWNVOTE_COMMENT
+            ));
+            return savedVote;
         }
     }
 
