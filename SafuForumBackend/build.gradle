@@ -1,0 +1,95 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.SafuForumBackend'
+version = '0.0.1-SNAPSHOT'
+description = 'Backend for SafuForum'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // OAuth2
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+
+    // Flyway
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+
+    // Database
+    runtimeOnly 'org.postgresql:postgresql'
+
+    // JWT
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Swagger
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.2.0'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+// Load .env file for bootRun
+bootRun {
+    doFirst {
+        def envFile = file('.env')
+        println "Looking for .env file at: ${envFile.absolutePath}"
+        println "File exists: ${envFile.exists()}"
+
+        if (envFile.exists()) {
+            println "Loading .env file..."
+            envFile.readLines().each { line ->
+                line = line.trim()
+                if (line && !line.startsWith('#') && line.contains('=')) {
+                    def parts = line.split('=', 2)
+                    def key = parts[0].trim()
+                    def value = parts.length > 1 ? parts[1].trim() : ''
+                    println "Setting ${key}=${value}"
+                    environment key, value
+                }
+            }
+        } else {
+            println ".env file not found!"
+        }
+    }
+}
+
+// Load .env file for tests
+test {
+    useJUnitPlatform()
+    doFirst {
+        def envFile = file('.env')
+        if (envFile.exists()) {
+            envFile.readLines().each { line ->
+                line = line.trim()
+                if (line && !line.startsWith('#') && line.contains('=')) {
+                    def parts = line.split('=', 2)
+                    def key = parts[0].trim()
+                    def value = parts.length > 1 ? parts[1].trim() : ''
+                    environment key, value
+                }
+            }
+        }
+    }
+}
