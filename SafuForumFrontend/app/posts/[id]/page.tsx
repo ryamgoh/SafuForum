@@ -129,7 +129,7 @@ export default function PostDetail() {
       fetchComments();
       toast.success('Reply posted!');
     } catch (error) {
-      toast.error('Failed to post reply');
+      toast.error('Please login to reply');
       throw error;
     }
   };

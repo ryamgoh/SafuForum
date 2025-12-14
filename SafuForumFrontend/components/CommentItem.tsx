@@ -7,6 +7,7 @@ import { votesApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowUp, ArrowDown, MessageSquare, ChevronDown, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
+import toast from 'react-hot-toast';
 
 interface CommentItemProps {
   comment: Comment;
@@ -43,7 +44,7 @@ export default function CommentItem({ comment, depth = 0, onReply }: CommentItem
       await fetchVoteScore();
     } catch (error) {
       console.error('Failed to vote on comment:', error);
-      alert('Please login to vote');
+      toast.error('Please login to vote');
     }
   };
 

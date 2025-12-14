@@ -7,6 +7,7 @@ import { votesApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { MessageSquare, Eye, ArrowUp, ArrowDown } from 'lucide-react';
 import Image from 'next/image';
+import toast from 'react-hot-toast';
 
 interface PostCardProps {
   post: Post;
@@ -44,7 +45,7 @@ export default function PostCard({ post }: PostCardProps) {
       await fetchVoteScore();
     } catch (error) {
       console.error('Failed to vote:', error);
-      alert('Please login to vote');
+      toast.error('Please login to vote');
     } finally {
       setLoading(false);
     }
