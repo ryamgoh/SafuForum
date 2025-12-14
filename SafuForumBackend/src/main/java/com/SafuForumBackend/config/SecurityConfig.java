@@ -5,6 +5,7 @@ import com.SafuForumBackend.auth.filter.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -28,16 +29,37 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                // 1. ENABLE CORS HERE
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                 .authorizeHttpRequests(auth -> auth
+                        // Public endpoints
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
                         .requestMatchers("/api/auth/**", "/oauth2/**", "/login/**").permitAll()
-                        .requestMatchers("/api/posts/**").permitAll()
+
+                        // Read-only access for everyone (GET requests)
+                        .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/comments/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/tags/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/votes/**").permitAll()  // Allow viewing vote scores
+
+                        // Write operations require authentication (POST, PUT, DELETE)
+                        .requestMatchers(HttpMethod.POST, "/api/posts/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/posts/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/posts/**").authenticated()
+
+                        .requestMatchers(HttpMethod.POST, "/api/comments/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/comments/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/comments/**").authenticated()
+
+                        .requestMatchers(HttpMethod.POST, "/api/votes/**").authenticated()  // Voting requires auth
+                        .requestMatchers(HttpMethod.PUT, "/api/votes/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/votes/**").authenticated()
+
+                        // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
 
@@ -54,7 +76,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:8080"));
+        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3001", "http://localhost:8080"));
 
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 
