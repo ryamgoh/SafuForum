@@ -4,41 +4,52 @@ import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { tokenRefreshService } from '@/lib/token-refresh-service';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/lib/auth-context';
 
 function CallbackContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { refreshUser } = useAuth();
+
+
 
   useEffect(() => {
-    const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken');
+    const handleAuth = async () => {
+      const accessToken = searchParams.get('accessToken');
+      const refreshToken = searchParams.get('refreshToken');
 
-    if (accessToken && refreshToken) {
-      try {
-        // Store tokens in localStorage
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
+      if (accessToken && refreshToken) {
+        try {
+          // Store tokens in localStorage
+          localStorage.setItem('accessToken', accessToken);
+          localStorage.setItem('refreshToken', refreshToken);
 
-        // Start proactive token refresh monitoring
-        tokenRefreshService.startRefreshMonitoring();
+          // Start proactive token refresh monitoring
+          tokenRefreshService.startRefreshMonitoring();
 
-        // Show success message
-        toast.success('Successfully logged in!');
+          // Refresh user state
+          await refreshUser();
 
-        // Redirect to home page
-        router.push('/');
-      } catch (error) {
-        console.error('Failed to store tokens:', error);
-        toast.error('Authentication failed. Please try again.');
-        router.push('/?error=storage_failed');
+          // Show success message
+          toast.success('Successfully logged in!');
+
+          // Redirect to home page
+          router.push('/');
+        } catch (error) {
+          console.error('Failed to store tokens:', error);
+          toast.error('Authentication failed. Please try again.');
+          router.push('/?error=storage_failed');
+        }
+      } else {
+        console.error('No tokens received from OAuth callback');
+        toast.error('Authentication failed. No tokens received.');
+        // Redirect to home with error
+        router.push('/?error=auth_failed');
       }
-    } else {
-      console.error('No tokens received from OAuth callback');
-      toast.error('Authentication failed. No tokens received.');
-      // Redirect to home with error
-      router.push('/?error=auth_failed');
-    }
-  }, [searchParams, router]);
+    };
+
+    handleAuth();
+  }, [searchParams, router, refreshUser]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
