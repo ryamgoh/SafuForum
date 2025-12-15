@@ -19,14 +19,13 @@ export interface Post {
   id: number;
   title: string;
   content: string;
-  authorId: number;
   author: User;
-  viewCount: number;
   commentCount: number;
+  voteScore: number;
   tags?: Tag[];
   createdAt: string;
   updatedAt: string;
-  editedAt?: string;
+  isDeleted: boolean;
 }
 
 export interface CreatePostRequest {

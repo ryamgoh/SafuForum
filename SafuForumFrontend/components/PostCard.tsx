@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Post } from '@/lib/types';
 import { votesApi } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
-import { MessageSquare, Eye, ArrowUp, ArrowDown } from 'lucide-react';
+import { MessageSquare, ArrowUp, ArrowDown } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 
@@ -161,11 +161,7 @@ export default function PostCard({ post }: PostCardProps) {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-1">
                 <MessageSquare className="w-4 h-4" />
-                <span>0</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Eye className="w-4 h-4" />
-                <span>0</span>
+                <span>{post.commentCount}</span>
               </div>
             </div>
           </div>
