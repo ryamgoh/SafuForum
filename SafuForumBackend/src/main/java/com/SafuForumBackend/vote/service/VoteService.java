@@ -45,7 +45,7 @@ public class VoteService {
             throw new RuntimeException("Vote type must be 1 (upvote) or -1 (downvote)");
         }
 
-        return voteWithRetry(request, currentUser, 0);  // <-- CHANGED THIS LINE
+        return voteWithRetry(request, currentUser, 0);
     }
 
     private VoteResponse voteWithRetry(VoteRequest request, User currentUser, int attempt) {
@@ -121,7 +121,6 @@ public class VoteService {
             Vote vote = existingVote.get();
 
             if (vote.getVoteType().equals(voteType)) {
-                // Same vote - remove it (toggle off)
                 voteRepository.delete(vote);
                 voteEventPublisher.sendMessage(new VoteEvent(
                         post.getAuthor().getId(),
@@ -131,19 +130,24 @@ public class VoteService {
                 ));
                 return null;
             } else {
-                // Different vote - update it
+                Short oldVoteType = vote.getVoteType();
                 vote.setVoteType(voteType);
                 Vote savedVote = voteRepository.save(vote);
+
+                short reputationDelta = (short) (
+                        (voteType == 1 ? VoteConstants.UPVOTE_POST : VoteConstants.DOWNVOTE_POST) -
+                                (oldVoteType == 1 ? VoteConstants.UPVOTE_POST : VoteConstants.DOWNVOTE_POST)
+                );
+
                 voteEventPublisher.sendMessage(new VoteEvent(
                         post.getAuthor().getId(),
                         postId,
                         EntityType.POST,
-                        voteType == 1 ? VoteConstants.UPVOTE_POST * 2 : VoteConstants.DOWNVOTE_POST * 2
+                        reputationDelta
                 ));
                 return savedVote;
             }
         } else {
-            // New vote
             try {
                 Vote vote = Vote.builder()
                         .user(currentUser)
@@ -179,7 +183,6 @@ public class VoteService {
             Vote vote = existingVote.get();
 
             if (vote.getVoteType().equals(voteType)) {
-                // Same vote - remove it (toggle off)
                 voteRepository.delete(vote);
                 voteEventPublisher.sendMessage(new VoteEvent(
                         comment.getAuthor().getId(),
@@ -189,19 +192,24 @@ public class VoteService {
                 ));
                 return null;
             } else {
-                // Different vote - update it
+                Short oldVoteType = vote.getVoteType();
                 vote.setVoteType(voteType);
                 Vote savedVote = voteRepository.save(vote);
+
+                short reputationDelta = (short) (
+                        (voteType == 1 ? VoteConstants.UPVOTE_COMMENT : VoteConstants.DOWNVOTE_COMMENT) -
+                                (oldVoteType == 1 ? VoteConstants.UPVOTE_COMMENT : VoteConstants.DOWNVOTE_COMMENT)
+                );
+
                 voteEventPublisher.sendMessage(new VoteEvent(
                         comment.getAuthor().getId(),
                         commentId,
                         EntityType.COMMENT,
-                        voteType == 1 ? VoteConstants.UPVOTE_COMMENT * 2 : VoteConstants.DOWNVOTE_COMMENT * 2
+                        reputationDelta
                 ));
                 return savedVote;
             }
         } else {
-            // New vote
             try {
                 Vote vote = Vote.builder()
                         .user(currentUser)
@@ -218,7 +226,6 @@ public class VoteService {
                 ));
                 return savedVote;
             } catch (DataIntegrityViolationException e) {
-                // Race condition: vote was created by another thread
                 throw new OptimisticLockingFailureException("Vote already exists", e);
             }
         }
