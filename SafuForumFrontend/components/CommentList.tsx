@@ -1,14 +1,16 @@
 'use client';
 
-import { Comment } from '@/lib/types';
+import { Comment, User } from '@/lib/types';
 import CommentItem from './CommentItem';
 
 interface CommentListProps {
   comments: Comment[];
   onReply: (commentId: number, content: string) => Promise<void>;
+  onUpdate?: () => void;
+  currentUser?: User | null;
 }
 
-export default function CommentList({ comments, onReply }: CommentListProps) {
+export default function CommentList({ comments, onReply, onUpdate, currentUser }: CommentListProps) {
   if (comments.length === 0) {
     return (
       <div className="text-center py-8">
@@ -20,7 +22,13 @@ export default function CommentList({ comments, onReply }: CommentListProps) {
   return (
     <div className="space-y-1">
       {comments.map((comment) => (
-        <CommentItem key={comment.id} comment={comment} onReply={onReply} />
+        <CommentItem
+          key={comment.id}
+          comment={comment}
+          onReply={onReply}
+          onUpdate={onUpdate}
+          currentUser={currentUser}
+        />
       ))}
     </div>
   );
