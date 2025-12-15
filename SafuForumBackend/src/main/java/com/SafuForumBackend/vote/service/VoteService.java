@@ -10,15 +10,19 @@ import com.SafuForumBackend.vote.dto.VoteRequest;
 import com.SafuForumBackend.vote.dto.VoteResponse;
 import com.SafuForumBackend.vote.dto.VoteScoreResponse;
 import com.SafuForumBackend.vote.entity.Vote;
+import com.SafuForumBackend.vote.enums.EntityType;
 import com.SafuForumBackend.vote.event.VoteEvent;
 import com.SafuForumBackend.vote.repository.VoteRepository;
-import com.SafuForumBackend.vote.enums.EntityType;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class VoteService {
@@ -27,6 +31,8 @@ public class VoteService {
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
     private final VoteEventPublisher voteEventPublisher;
+
+    private static final int MAX_RETRIES = 3;
 
     @Transactional
     public VoteResponse vote(VoteRequest request, User currentUser) {
@@ -39,15 +45,25 @@ public class VoteService {
             throw new RuntimeException("Vote type must be 1 (upvote) or -1 (downvote)");
         }
 
-        Vote vote;
+        return voteWithRetry(request, currentUser, 0);  // <-- CHANGED THIS LINE
+    }
 
-        if (request.getPostId() != null) {
-            vote = voteOnPost(request.getPostId(), request.getVoteType(), currentUser);
-        } else {
-            vote = voteOnComment(request.getCommentId(), request.getVoteType(), currentUser);
+    private VoteResponse voteWithRetry(VoteRequest request, User currentUser, int attempt) {
+        try {
+            Vote vote;
+            if (request.getPostId() != null) {
+                vote = voteOnPost(request.getPostId(), request.getVoteType(), currentUser);
+            } else {
+                vote = voteOnComment(request.getCommentId(), request.getVoteType(), currentUser);
+            }
+            return vote != null ? convertToResponse(vote) : null;
+        } catch (OptimisticLockingFailureException e) {
+            if (attempt < MAX_RETRIES) {
+                log.warn("Optimistic lock failure on vote attempt {}, retrying...", attempt + 1);
+                return voteWithRetry(request, currentUser, attempt + 1);
+            }
+            throw new RuntimeException("Failed to process vote after " + MAX_RETRIES + " attempts", e);
         }
-
-        return vote != null ? convertToResponse(vote) : null;
     }
 
     @Transactional
@@ -128,20 +144,24 @@ public class VoteService {
             }
         } else {
             // New vote
-            Vote vote = Vote.builder()
-                    .user(currentUser)
-                    .post(post)
-                    .voteType(voteType)
-                    .build();
-            Vote savedVote = voteRepository.save(vote);
+            try {
+                Vote vote = Vote.builder()
+                        .user(currentUser)
+                        .post(post)
+                        .voteType(voteType)
+                        .build();
+                Vote savedVote = voteRepository.save(vote);
 
-            voteEventPublisher.sendMessage(new VoteEvent(
-                    post.getAuthor().getId(),
-                    postId,
-                    EntityType.POST,
-                    voteType == 1 ? VoteConstants.UPVOTE_POST : VoteConstants.DOWNVOTE_POST
-            ));
-            return savedVote;
+                voteEventPublisher.sendMessage(new VoteEvent(
+                        post.getAuthor().getId(),
+                        postId,
+                        EntityType.POST,
+                        voteType == 1 ? VoteConstants.UPVOTE_POST : VoteConstants.DOWNVOTE_POST
+                ));
+                return savedVote;
+            } catch (DataIntegrityViolationException e) {
+                throw new OptimisticLockingFailureException("Vote already exists", e);
+            }
         }
     }
 
@@ -182,19 +202,25 @@ public class VoteService {
             }
         } else {
             // New vote
-            Vote vote = Vote.builder()
-                    .user(currentUser)
-                    .comment(comment)
-                    .voteType(voteType)
-                    .build();
-            Vote savedVote = voteRepository.save(vote);
-            voteEventPublisher.sendMessage(new VoteEvent(
-                    comment.getAuthor().getId(),
-                    commentId,
-                    EntityType.COMMENT,
-                    voteType == 1 ? VoteConstants.UPVOTE_COMMENT : VoteConstants.DOWNVOTE_COMMENT
-            ));
-            return savedVote;
+            try {
+                Vote vote = Vote.builder()
+                        .user(currentUser)
+                        .comment(comment)
+                        .voteType(voteType)
+                        .build();
+                Vote savedVote = voteRepository.save(vote);
+
+                voteEventPublisher.sendMessage(new VoteEvent(
+                        comment.getAuthor().getId(),
+                        commentId,
+                        EntityType.COMMENT,
+                        voteType == 1 ? VoteConstants.UPVOTE_COMMENT : VoteConstants.DOWNVOTE_COMMENT
+                ));
+                return savedVote;
+            } catch (DataIntegrityViolationException e) {
+                // Race condition: vote was created by another thread
+                throw new OptimisticLockingFailureException("Vote already exists", e);
+            }
         }
     }
 

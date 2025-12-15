@@ -5,7 +5,9 @@ import com.SafuForumBackend.post.entity.Post;
 import com.SafuForumBackend.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
+
 
 @Entity
 @Table(name = "votes", uniqueConstraints = {
@@ -37,6 +39,10 @@ public class Vote {
 
     @Column(name = "vote_type", nullable = false)
     private Short voteType; // 1 for upvote, -1 for downvote
+
+    @Version
+    @Column(name = "version")
+    private Long version;
 
     @Builder.Default
     @Column(name = "created_at", nullable = false, updatable = false)
