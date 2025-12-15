@@ -183,9 +183,9 @@ export default function PostDetail() {
     }
   };
 
-  const canEdit = currentUser && post && currentUser.id === post.authorId;
+  const canEdit = currentUser && post && currentUser.id === post.author.id;
   const canDelete = currentUser && post && (
-    currentUser.id === post.authorId ||
+    currentUser.id === post.author.id ||
     currentUser.role === 'MODERATOR' ||
     currentUser.role === 'ADMIN'
   );
@@ -413,7 +413,12 @@ export default function PostDetail() {
           </div>
         </form>
 
-        <CommentList comments={comments} onReply={handleReply} />
+        <CommentList
+          comments={comments}
+          onReply={handleReply}
+          onUpdate={fetchComments}
+          currentUser={currentUser}
+        />
       </div>
 
       {/* Delete Confirmation Modal */}
