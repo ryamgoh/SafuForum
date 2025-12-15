@@ -37,6 +37,14 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
+      const refreshToken = localStorage.getItem('refreshToken');
+
+      // If no refresh token exists, user is simply not logged in
+      // Let the request fail gracefully without redirecting
+      if (!refreshToken) {
+        return Promise.reject(error);
+      }
+
       try {
         // Check if already refreshing to avoid race conditions
         if (tokenRefreshService.isCurrentlyRefreshing()) {
@@ -48,26 +56,21 @@ apiClient.interceptors.response.use(
           }
         }
 
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (refreshToken) {
-          // Use the token refresh service to handle the refresh
-          const newAccessToken = await tokenRefreshService.refreshAccessToken();
+        // Use the token refresh service to handle the refresh
+        const newAccessToken = await tokenRefreshService.refreshAccessToken();
 
-          // Retry the original request with new token
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-          return apiClient(originalRequest);
-        } else {
-          // No refresh token available
-          throw new Error('No refresh token available');
-        }
+        // Retry the original request with new token
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return apiClient(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, clear tokens and redirect to home
+        // Refresh failed with existing tokens - they're invalid
+        // Clear tokens and redirect to home
         console.error('Token refresh failed, logging out:', refreshError);
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         tokenRefreshService.stopRefreshMonitoring();
 
-        // Redirect to home page instead of non-existent /login
+        // Redirect to home page
         if (typeof window !== 'undefined') {
           window.location.href = '/';
         }
