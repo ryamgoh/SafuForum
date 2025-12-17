@@ -39,7 +39,7 @@ public class PostService {
 
     @Transactional
     public PostResponse createPost(CreatePostRequest request, User currentUser) {
-        // Validate image IDs if provided
+
         if (request.getImageIds() != null && !request.getImageIds().isEmpty()) {
             validateAndAttachImages(request.getImageIds(), currentUser, null, true);
         }
