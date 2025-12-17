@@ -106,6 +106,10 @@ public class ImageService {
         imageRepository.delete(image);
     }
 
+    public java.util.Optional<Image> getImageById(Long imageId) {
+        return imageRepository.findById(imageId);
+    }
+
     /**
      * Get images for a post
      */
