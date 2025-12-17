@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ArrowUp, ArrowDown, MessageSquare, ChevronDown, ChevronRight, Edit, Trash2, X } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
+import ImageGallery from './ImageGallery';
 
 interface CommentItemProps {
   comment: Comment;
@@ -223,9 +224,17 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-700 text-sm mb-2 whitespace-pre-wrap">
-                    {comment.content}
-                  </p>
+                  <>
+                    <p className="text-gray-700 text-sm mb-2 whitespace-pre-wrap">
+                      {comment.content}
+                    </p>
+                    {/* Images */}
+                    {comment.images && comment.images.length > 0 && (
+                      <div className="mb-3">
+                        <ImageGallery images={comment.images} columns={3} size="small" />
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Actions */}

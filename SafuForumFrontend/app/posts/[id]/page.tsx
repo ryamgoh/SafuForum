@@ -10,6 +10,8 @@ import Link from 'next/link';
 import CommentList from '@/components/CommentList';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
+import ImageGallery from '@/components/ImageGallery';
+import ImageUploader from '@/components/ImageUploader';
 
 export default function PostDetail() {
   const params = useParams();
@@ -18,6 +20,7 @@ export default function PostDetail() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentContent, setCommentContent] = useState('');
+  const [commentImageIds, setCommentImageIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [postVoteScore, setPostVoteScore] = useState<VoteScore>({ score: 0, userVote: null });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -107,8 +110,10 @@ export default function PostDetail() {
       await commentsApi.create({
         postId: Number(params.id),
         content: commentContent,
+        imageIds: commentImageIds.length > 0 ? commentImageIds : undefined,
       });
       setCommentContent('');
+      setCommentImageIds([]);
       fetchComments();
       toast.success('Comment posted!');
     } catch (error) {
@@ -355,6 +360,13 @@ export default function PostDetail() {
               <p className="text-gray-700 whitespace-pre-wrap">{post.content}</p>
             </div>
 
+            {/* Images */}
+            {post.images && post.images.length > 0 && (
+              <div className="mb-6">
+                <ImageGallery images={post.images} columns={3} size="medium" />
+              </div>
+            )}
+
             {/* Vote Section */}
             <div className="flex items-center space-x-4 pt-6 border-t border-gray-200">
               <div className="flex items-center space-x-2">
@@ -402,6 +414,13 @@ export default function PostDetail() {
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
             rows={4}
           />
+          <div className="mt-4">
+            <ImageUploader
+              maxImages={3}
+              onImagesChange={setCommentImageIds}
+              disabled={submitting}
+            />
+          </div>
           <div className="flex justify-end mt-3">
             <button
               type="submit"
@@ -413,8 +432,8 @@ export default function PostDetail() {
           </div>
         </form>
 
-        <CommentList
-          comments={comments}
+        <CommentList 
+          comments={comments} 
           onReply={handleReply}
           onUpdate={fetchComments}
           currentUser={currentUser}

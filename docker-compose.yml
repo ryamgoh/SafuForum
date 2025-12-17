@@ -5,6 +5,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: safuforum-postgres
+    restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
@@ -25,9 +26,10 @@ services:
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: safuforum-rabbitmq
+    restart: unless-stopped
     ports:
-      - "5672:5672"   # AMQP protocol
-      - "15672:15672" # Management UI
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -45,6 +47,7 @@ services:
       context: ./SafuForumBackend
       dockerfile: Dockerfile
     container_name: safuforum-backend
+    restart: unless-stopped
     ports:
       - "8081:8081"
     environment:
@@ -72,6 +75,7 @@ services:
       context: ./SafuForumFrontend
       dockerfile: Dockerfile
     container_name: safuforum-frontend
+    restart: unless-stopped
     ports:
       - "3000:3000"
     depends_on:
@@ -79,11 +83,11 @@ services:
     networks:
       - safuforum-net
 
-  # SeaweedFS Deployment
-  # Master node
+  # SeaweedFS Master
   seaweed-master:
     image: chrislusf/seaweedfs:latest
     container_name: seaweed-master
+    restart: unless-stopped
     ports:
       - "9333:9333"
       - "19333:19333"
@@ -93,10 +97,11 @@ services:
     networks:
       - safuforum-net
 
-  # Volume node
+  # SeaweedFS Volume
   seaweed-volume:
     image: chrislusf/seaweedfs:latest
     container_name: seaweed-volume
+    restart: unless-stopped
     ports:
       - "8080:8080"
     command: "volume -mserver=seaweed-master:9333 -port=8080 -ip=seaweed-volume"
@@ -107,10 +112,11 @@ services:
     networks:
       - safuforum-net
 
-  # Filer
+  # SeaweedFS Filer
   seaweed-filer:
     image: chrislusf/seaweedfs:latest
     container_name: seaweed-filer
+    restart: unless-stopped
     command: ["filer", "-master=seaweed-master:9333", "-ip=seaweed-filer"]
     depends_on:
       - seaweed-master
@@ -121,11 +127,11 @@ services:
     networks:
       - safuforum-net
 
-  # S3 Gateway
+  # SeaweedFS S3 Gateway
   seaweed-s3:
     image: chrislusf/seaweedfs:latest
     container_name: seaweed-s3
-    restart: on-failure
+    restart: unless-stopped
     command: "s3 -port=8333 -filer=seaweed-filer:8888 -ip.bind=0.0.0.0 -config=/config/s3_identity.json"
     ports:
       - "8333:8333"

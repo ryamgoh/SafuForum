@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { postsApi } from '@/lib/api';
 import { ArrowLeft, X } from 'lucide-react';
 import Link from 'next/link';
+import ImageUploader from '@/components/ImageUploader';
 
 export default function NewPost() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function NewPost() {
   const [content, setContent] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [imageIds, setImageIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -59,6 +61,7 @@ export default function NewPost() {
         title: title.trim(),
         content: content.trim(),
         tags: tags.length > 0 ? tags : undefined,
+        imageIds: imageIds.length > 0 ? imageIds : undefined,
       });
       router.push(`/posts/${response.data.id}`);
     } catch (err: any) {
@@ -123,6 +126,21 @@ export default function NewPost() {
           />
           <p className="text-sm text-gray-500 mt-1">
             {content.length} characters (minimum 10)
+          </p>
+        </div>
+
+        {/* Images */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Images
+          </label>
+          <ImageUploader
+            maxImages={10}
+            onImagesChange={setImageIds}
+            disabled={submitting}
+          />
+          <p className="text-sm text-gray-500 mt-2">
+            Upload up to 10 images (PNG, JPG, GIF, WebP, max 10MB each)
           </p>
         </div>
 

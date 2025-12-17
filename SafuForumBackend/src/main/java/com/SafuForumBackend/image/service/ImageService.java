@@ -5,13 +5,17 @@ import com.SafuForumBackend.image.entity.Image;
 import com.SafuForumBackend.image.repository.ImageRepository;
 import com.SafuForumBackend.user.entity.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
@@ -19,7 +23,9 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ImageService {
@@ -27,6 +33,8 @@ public class ImageService {
     private final ImageRepository imageRepository;
     private final S3Client s3Client;
     private final S3Config s3Config;
+
+    private final AtomicBoolean bucketInitialized = new AtomicBoolean(false);
 
     // Allowed image formats
     private static final List<String> ALLOWED_MIME_TYPES = Arrays.asList(
@@ -40,10 +48,67 @@ public class ImageService {
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
 
     /**
+     * Ensure S3 bucket exists (lazy initialization on first upload)
+     */
+    private void ensureBucketExists() {
+        if (bucketInitialized.get()) {
+            return;
+        }
+
+        synchronized (this) {
+            if (bucketInitialized.get()) {
+                return;
+            }
+
+            String bucketName = s3Config.getBucketName();
+            int maxRetries = 3;
+            int retryDelayMs = 1000;
+
+            for (int i = 0; i < maxRetries; i++) {
+                try {
+                    s3Client.headBucket(HeadBucketRequest.builder()
+                            .bucket(bucketName)
+                            .build());
+                    log.info("S3 bucket '{}' already exists", bucketName);
+                    bucketInitialized.set(true);
+                    return;
+                } catch (NoSuchBucketException e) {
+                    try {
+                        s3Client.createBucket(CreateBucketRequest.builder()
+                                .bucket(bucketName)
+                                .build());
+                        log.info("S3 bucket '{}' created successfully", bucketName);
+                        bucketInitialized.set(true);
+                        return;
+                    } catch (Exception createEx) {
+                        log.warn("Attempt {} to create bucket failed: {}", i + 1, createEx.getMessage());
+                    }
+                } catch (Exception e) {
+                    log.warn("Attempt {} to check bucket failed: {}", i + 1, e.getMessage());
+                }
+
+                if (i < maxRetries - 1) {
+                    try {
+                        Thread.sleep(retryDelayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Interrupted while initializing S3 bucket", ie);
+                    }
+                }
+            }
+
+            throw new RuntimeException("Failed to initialize S3 bucket '" + bucketName + "' after " + maxRetries + " attempts");
+        }
+    }
+
+    /**
      * Upload image to SeaweedFS and create database record
      */
     @Transactional
     public Image uploadImage(MultipartFile file, User uploader) throws IOException {
+        // Ensure bucket exists before upload
+        ensureBucketExists();
+
         // Validate file
         validateImageFile(file);
 
@@ -163,12 +228,12 @@ public class ImageService {
                 imageRepository.delete(image);
                 deletedCount++;
             } catch (Exception e) {
-                System.err.println("Failed to delete orphaned image " + image.getId() + ": " + e.getMessage());
+                log.error("Failed to delete orphaned image {}: {}", image.getId(), e.getMessage());
             }
         }
 
         if (deletedCount > 0) {
-            System.out.println("Cleaned up " + deletedCount + " orphaned images");
+            log.info("Cleaned up {} orphaned images", deletedCount);
         }
     }
 
@@ -223,7 +288,7 @@ public class ImageService {
                     .build();
             s3Client.deleteObject(deleteRequest);
         } catch (Exception e) {
-            System.err.println("Failed to delete from S3: " + s3Key + " - " + e.getMessage());
+            log.error("Failed to delete from S3: {} - {}", s3Key, e.getMessage());
             // Don't throw - continue with DB deletion even if S3 deletion fails
         }
     }
