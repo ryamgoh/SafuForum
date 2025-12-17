@@ -1,22 +1,27 @@
 package com.SafuForumBackend.post.service;
 
-import com.SafuForumBackend.post.dto.*;
+import com.SafuForumBackend.comment.repository.CommentRepository;
+import com.SafuForumBackend.image.dto.ImageResponse;
+import com.SafuForumBackend.image.entity.Image;
+import com.SafuForumBackend.image.repository.ImageRepository;
+import com.SafuForumBackend.post.dto.CreatePostRequest;
+import com.SafuForumBackend.post.dto.PostResponse;
+import com.SafuForumBackend.post.dto.UpdatePostRequest;
 import com.SafuForumBackend.post.entity.Post;
 import com.SafuForumBackend.post.repository.PostRepository;
-import com.SafuForumBackend.tag.entity.Tag;
 import com.SafuForumBackend.tag.dto.TagResponse;
+import com.SafuForumBackend.tag.entity.Tag;
 import com.SafuForumBackend.tag.repository.TagRepository;
 import com.SafuForumBackend.user.dto.UserSummaryResponse;
 import com.SafuForumBackend.user.entity.User;
-import com.SafuForumBackend.comment.repository.CommentRepository;
 import com.SafuForumBackend.vote.repository.VoteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,9 +35,15 @@ public class PostService {
     private final TagRepository tagRepository;
     private final VoteRepository voteRepository;
     private final CommentRepository commentRepository;
+    private final ImageRepository imageRepository;  // ADDED
 
     @Transactional
     public PostResponse createPost(CreatePostRequest request, User currentUser) {
+        // Validate image IDs if provided
+        if (request.getImageIds() != null && !request.getImageIds().isEmpty()) {
+            validateAndAttachImages(request.getImageIds(), currentUser, null, true);
+        }
+
         Post post = Post.builder()
                 .title(request.getTitle())
                 .content(request.getContent())
@@ -47,6 +58,11 @@ public class PostService {
         }
 
         Post savedPost = postRepository.save(post);
+
+        if (request.getImageIds() != null && !request.getImageIds().isEmpty()) {
+            attachImagesToPost(request.getImageIds(), savedPost, currentUser);
+        }
+
         return convertToResponse(savedPost);
     }
 
@@ -63,7 +79,7 @@ public class PostService {
 
     public Page<PostResponse> getAllPosts(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Post> posts = postRepository.findByIsDeletedFalse(pageable);  // CHANGED
+        Page<Post> posts = postRepository.findByIsDeletedFalse(pageable);
         return posts.map(this::convertToResponse);
     }
 
@@ -135,6 +151,50 @@ public class PostService {
         postRepository.save(post);
     }
 
+    // ============ IMAGE HANDLING METHODS ============
+
+    /**
+     * Validate image IDs and check permissions before attaching
+     */
+    private void validateAndAttachImages(List<Long> imageIds, User currentUser, Long postId, boolean isNewPost) {
+        if (imageIds.size() > 10) {
+            throw new IllegalArgumentException("Cannot attach more than 10 images to a post");
+        }
+
+        for (Long imageId : imageIds) {
+            Image image = imageRepository.findById(imageId)
+                    .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+            if (!image.getUploader().getId().equals(currentUser.getId())) {
+                throw new IllegalArgumentException("You can only attach your own images");
+            }
+
+            if (!isNewPost && (image.getPost() != null || image.getComment() != null)) {
+                throw new IllegalArgumentException("Image " + imageId + " is already attached to content");
+            }
+
+            if (image.isDeleted()) {
+                throw new IllegalArgumentException("Cannot attach deleted image: " + imageId);
+            }
+        }
+    }
+
+    /**
+     * Attach validated images to a post
+     */
+    private void attachImagesToPost(List<Long> imageIds, Post post, User currentUser) {
+        for (int i = 0; i < imageIds.size(); i++) {
+            Long imageId = imageIds.get(i);
+            Image image = imageRepository.findById(imageId)
+                    .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+            image.setPost(post);
+            image.setDisplayOrder(i + 1); // 1-indexed
+            imageRepository.save(image);
+        }
+    }
+
+
     private Tag findOrCreateTag(String tagName) {
         String slug = tagName.toLowerCase().replaceAll("\\s+", "-");
 
@@ -163,7 +223,7 @@ public class PostService {
                         tag.getName(),
                         tag.getSlug(),
                         tag.getColor(),
-                        null  // ADD THIS - postCount not needed when showing post tags
+                        null
                 ))
                 .collect(Collectors.toList());
 
@@ -171,12 +231,25 @@ public class PostService {
 
         Long commentCount = commentRepository.countByPostIdAndIsDeletedFalse(post.getId());
 
+        List<Image> images = imageRepository.findByPostIdOrderByDisplayOrderAsc(post.getId());
+        List<ImageResponse> ImageResponses = images.stream()
+                .map(img -> new ImageResponse(
+                        img.getId(),
+                        img.getSeaweedfsUrl(),
+                        img.getOriginalFilename(),
+                        img.getFileSizeBytes(),
+                        img.getMimeType(),
+                        img.getDisplayOrder()
+                ))
+                .collect(Collectors.toList());
+
         return PostResponse.builder()
                 .id(post.getId())
                 .title(post.getTitle())
                 .content(post.getContent())
                 .author(author)
                 .tags(tags)
+                .images(ImageResponses)
                 .createdAt(post.getCreatedAt())
                 .updatedAt(post.getUpdatedAt())
                 .isDeleted(post.getIsDeleted())
