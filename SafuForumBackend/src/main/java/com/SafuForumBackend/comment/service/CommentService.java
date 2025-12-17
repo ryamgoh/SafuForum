@@ -5,6 +5,9 @@ import com.SafuForumBackend.comment.dto.CreateCommentRequest;
 import com.SafuForumBackend.comment.dto.UpdateCommentRequest;
 import com.SafuForumBackend.comment.entity.Comment;
 import com.SafuForumBackend.comment.repository.CommentRepository;
+import com.SafuForumBackend.image.dto.ImageResponse;
+import com.SafuForumBackend.image.entity.Image;
+import com.SafuForumBackend.image.repository.ImageRepository;
 import com.SafuForumBackend.post.entity.Post;
 import com.SafuForumBackend.post.repository.PostRepository;
 import com.SafuForumBackend.user.dto.UserSummaryResponse;
@@ -23,6 +26,7 @@ public class CommentService {
 
     private final CommentRepository commentRepository;
     private final PostRepository postRepository;
+    private final ImageRepository imageRepository;  // ADDED
 
     @Transactional
     public CommentResponse createComment(CreateCommentRequest request, User currentUser) {
@@ -31,6 +35,10 @@ public class CommentService {
 
         if (post.getIsDeleted()) {
             throw new RuntimeException("Cannot comment on a deleted post");
+        }
+
+        if (request.getImageIds() != null && !request.getImageIds().isEmpty()) {
+            validateAndAttachImages(request.getImageIds(), currentUser, null, true);
         }
 
         Comment comment = Comment.builder()
@@ -51,6 +59,11 @@ public class CommentService {
         }
 
         Comment savedComment = commentRepository.save(comment);
+
+        if (request.getImageIds() != null && !request.getImageIds().isEmpty()) {
+            attachImagesToComment(request.getImageIds(), savedComment, currentUser);
+        }
+
         return convertToResponse(savedComment);
     }
 
@@ -110,6 +123,50 @@ public class CommentService {
         commentRepository.save(comment);
     }
 
+    // ============ IMAGE HANDLING METHODS ============
+
+    /**
+     * Validate image IDs and check permissions before attaching
+     */
+    private void validateAndAttachImages(List<Long> imageIds, User currentUser, Long commentId, boolean isNewComment) {
+        if (imageIds.size() > 3) {
+            throw new IllegalArgumentException("Cannot attach more than 3 images to a comment");
+        }
+
+        for (Long imageId : imageIds) {
+            Image image = imageRepository.findById(imageId)
+                    .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+            if (!image.getUploader().getId().equals(currentUser.getId())) {
+                throw new IllegalArgumentException("You can only attach your own images");
+            }
+
+            if (!isNewComment && (image.getPost() != null || image.getComment() != null)) {
+                throw new IllegalArgumentException("Image " + imageId + " is already attached to content");
+            }
+
+            if (image.isDeleted()) {
+                throw new IllegalArgumentException("Cannot attach deleted image: " + imageId);
+            }
+        }
+    }
+
+    /**
+     * Attach validated images to a comment
+     */
+    private void attachImagesToComment(List<Long> imageIds, Comment comment, User currentUser) {
+        for (int i = 0; i < imageIds.size(); i++) {
+            Long imageId = imageIds.get(i);
+            Image image = imageRepository.findById(imageId)
+                    .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+            image.setComment(comment);
+            image.setDisplayOrder(i + 1); // 1-indexed
+            imageRepository.save(image);
+        }
+    }
+
+
     private CommentResponse convertToResponse(Comment comment) {
         UserSummaryResponse author = new UserSummaryResponse(
                 comment.getAuthor().getId(),
@@ -119,11 +176,25 @@ public class CommentService {
                 comment.getAuthor().getReputation()
         );
 
+        // Get images for comment (ADDED)
+        List<Image> images = imageRepository.findByCommentIdOrderByDisplayOrderAsc(comment.getId());
+        List<ImageResponse> imageResponses = images.stream()
+                .map(img -> new ImageResponse(
+                        img.getId(),
+                        img.getSeaweedfsUrl(),
+                        img.getOriginalFilename(),
+                        img.getFileSizeBytes(),
+                        img.getMimeType(),
+                        img.getDisplayOrder()
+                ))
+                .collect(Collectors.toList());
+
         return CommentResponse.builder()
                 .id(comment.getId())
                 .postId(comment.getPost().getId())
                 .content(comment.getContent())
                 .author(author)
+                .images(imageResponses)  // ADDED
                 .parentCommentId(comment.getParentComment() != null ? comment.getParentComment().getId() : null)
                 .createdAt(comment.getCreatedAt())
                 .updatedAt(comment.getUpdatedAt())
