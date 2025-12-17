@@ -12,52 +12,22 @@ const apiClient = axios.create({
 // Add access token and conditionally set Content-Type
 apiClient.interceptors.request.use(
   (config) => {
-    console.log('[API-CLIENT] Request interceptor - BEFORE:', {
-      url: config.url,
-      method: config.method,
-      headers: { ...config.headers },
-      headersType: config.headers?.constructor?.name,
-      isFormData: config.data instanceof FormData
-    });
-
     if (typeof window !== 'undefined') {
       const token = localStorage.getItem('accessToken');
-      console.log('[API-CLIENT] Token from localStorage:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
       if (token) {
-        // Use setAuthorization to ensure it's set properly on AxiosHeaders
-        if (config.headers && typeof config.headers.set === 'function') {
-          config.headers.set('Authorization', `Bearer ${token}`);
-        } else {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
+        config.headers.Authorization = `Bearer ${token}`;
       }
+    }
+
+    // Only set Content-Type to JSON if it's not already set and it's not FormData
+    if (!config.headers['Content-Type'] && !(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
     }
 
     // If it's FormData, delete Content-Type to let browser set it with boundary
     if (config.data instanceof FormData) {
-      console.log('[API-CLIENT] Detected FormData, deleting Content-Type header');
-      // Try multiple ways to delete the header to ensure it's removed
-      if (config.headers && typeof config.headers.delete === 'function') {
-        config.headers.delete('Content-Type');
-      } else {
-        delete config.headers['Content-Type'];
-      }
-      // Also try lowercase variant
-      if (config.headers && typeof config.headers.delete === 'function') {
-        config.headers.delete('content-type');
-      } else {
-        delete config.headers['content-type'];
-      }
-    } else if (!config.headers['Content-Type']) {
-      // Only set Content-Type to JSON if it's not already set and it's not FormData
-      config.headers['Content-Type'] = 'application/json';
+      delete config.headers['Content-Type'];
     }
-
-    console.log('[API-CLIENT] Request interceptor - AFTER:', {
-      url: config.url,
-      headers: { ...config.headers },
-      hasAuth: !!config.headers.Authorization
-    });
 
     return config;
   },

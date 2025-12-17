@@ -134,6 +134,23 @@ public class PostService {
             }
         }
 
+        // Handle images if provided
+        if (request.getImageIds() != null) {
+            // Detach old images (they become orphaned and will be cleaned up later)
+            List<Image> oldImages = imageRepository.findByPostIdOrderByDisplayOrderAsc(post.getId());
+            for (Image oldImage : oldImages) {
+                oldImage.setPost(null);
+                oldImage.setDisplayOrder(null);
+                imageRepository.save(oldImage);
+            }
+
+            // Validate and attach new images if any provided
+            if (!request.getImageIds().isEmpty()) {
+                validateAndAttachImages(request.getImageIds(), currentUser, id, false);
+                attachImagesToPost(request.getImageIds(), post, currentUser);
+            }
+        }
+
         Post updatedPost = postRepository.save(post);
         return convertToResponse(updatedPost);
     }

@@ -81,7 +81,12 @@ export default function ImageUploader({
         toast.success(`${file.name} uploaded successfully`);
       } catch (error: any) {
         console.error('Upload error:', error);
-        toast.error(`Failed to upload ${file.name}`);
+        // Extract backend error message or use generic fallback
+        const errorMessage = error.response?.data?.error ||
+                           error.response?.data?.message ||
+                           error.message ||
+                           'Upload failed';
+        toast.error(`${file.name}: ${errorMessage}`);
       }
     }
 

@@ -9,11 +9,12 @@ import { ArrowUp, ArrowDown, MessageSquare, ChevronDown, ChevronRight, Edit, Tra
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import ImageGallery from './ImageGallery';
+import ImageUploader from './ImageUploader';
 
 interface CommentItemProps {
   comment: Comment;
   depth?: number;
-  onReply: (commentId: number, content: string) => Promise<void>;
+  onReply: (commentId: number, content: string, imageIds?: number[]) => Promise<void>;
   onUpdate?: () => void;
   currentUser?: User | null;
 }
@@ -22,6 +23,7 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
   const [voteScore, setVoteScore] = useState({ score: 0, userVote: null as number | null });
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  const [replyImageIds, setReplyImageIds] = useState<number[]>([]);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -65,8 +67,9 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
 
     try {
       setSubmitting(true);
-      await onReply(comment.id, replyContent);
+      await onReply(comment.id, replyContent, replyImageIds);
       setReplyContent('');
+      setReplyImageIds([]);
       setIsReplying(false);
     } catch (error) {
       console.error('Failed to submit reply:', error);
@@ -299,11 +302,19 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none"
                       rows={3}
                     />
+                    <div className="mt-2">
+                      <ImageUploader
+                        maxImages={3}
+                        onImagesChange={setReplyImageIds}
+                        disabled={submitting}
+                      />
+                    </div>
                     <div className="flex justify-end space-x-2 mt-2">
                       <button
                         onClick={() => {
                           setIsReplying(false);
                           setReplyContent('');
+                          setReplyImageIds([]);
                         }}
                         className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
                       >

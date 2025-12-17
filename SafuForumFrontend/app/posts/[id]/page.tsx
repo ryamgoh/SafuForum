@@ -30,6 +30,7 @@ export default function PostDetail() {
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editTags, setEditTags] = useState('');
+  const [editImageIds, setEditImageIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Delete state
@@ -61,6 +62,7 @@ export default function PostDetail() {
       setEditTitle(response.data.title);
       setEditContent(response.data.content);
       setEditTags(response.data.tags?.map(t => t.name).join(', ') || '');
+      setEditImageIds(response.data.images?.map(img => img.id) || []);
     } catch (error) {
       console.error('Failed to fetch post:', error);
       toast.error('Failed to load post');
@@ -124,12 +126,17 @@ export default function PostDetail() {
     }
   };
 
-  const handleReply = async (parentCommentId: number, content: string) => {
+  const handleReply = async (
+    parentCommentId: number,
+    content: string,
+    imageIds?: number[]
+  ) => {
     try {
       await commentsApi.create({
         postId: Number(params.id),
         parentCommentId: parentCommentId,
         content: content,
+        imageIds: imageIds && imageIds.length > 0 ? imageIds : undefined,
       });
       fetchComments();
       toast.success('Reply posted!');
@@ -148,6 +155,7 @@ export default function PostDetail() {
     setEditTitle(post?.title || '');
     setEditContent(post?.content || '');
     setEditTags(post?.tags?.map(t => t.name).join(', ') || '');
+    setEditImageIds(post?.images?.map(img => img.id) || []);
   };
 
   const handleSaveEdit = async () => {
@@ -162,6 +170,7 @@ export default function PostDetail() {
         title: editTitle,
         content: editContent,
         tags: editTags.split(',').map(t => t.trim()).filter(Boolean),
+        imageIds: editImageIds,
       });
 
       setIsEditing(false);
@@ -259,6 +268,21 @@ export default function PostDetail() {
                 placeholder="java, spring-boot, help"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Images
+              </label>
+              <ImageUploader
+                maxImages={10}
+                initialImages={post?.images}
+                onImagesChange={setEditImageIds}
+                disabled={saving}
+              />
+              <p className="text-sm text-gray-500 mt-2">
+                Upload up to 10 images (PNG, JPG, GIF, WebP, max 10MB each)
+              </p>
             </div>
 
             <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
