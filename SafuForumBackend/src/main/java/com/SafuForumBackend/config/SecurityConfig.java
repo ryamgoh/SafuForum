@@ -44,7 +44,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/comments/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/tags/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/votes/**").permitAll()  // Allow viewing vote scores
+                        .requestMatchers(HttpMethod.GET, "/api/votes/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/images/**").permitAll()
 
                         // Write operations require authentication (POST, PUT, DELETE)
                         .requestMatchers(HttpMethod.POST, "/api/posts/**").authenticated()
@@ -58,6 +59,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/votes/**").authenticated()  // Voting requires auth
                         .requestMatchers(HttpMethod.PUT, "/api/votes/**").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/votes/**").authenticated()
+
+                        .requestMatchers(HttpMethod.POST, "/api/images/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/images/**").authenticated()
 
                         // Everything else requires authentication
                         .anyRequest().authenticated()
