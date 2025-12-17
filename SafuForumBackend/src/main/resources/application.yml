@@ -49,6 +49,13 @@ spring:
             user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
             user-name-attribute: sub
 
+    seaweedfs:
+      s3:
+        endpoint: http://localhost:8333
+        access-key: dev
+        secret-key: dev
+        bucket-name: safu-forum-images
+
 server:
   port: 8081
 
