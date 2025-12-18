@@ -134,6 +134,11 @@ public class PostService {
             }
         }
 
+        // Handle image updates
+        if (request.getImageIds() != null) {
+            updatePostImages(post, request.getImageIds(), currentUser);
+        }
+
         Post updatedPost = postRepository.save(post);
         return convertToResponse(updatedPost);
     }
@@ -188,6 +193,63 @@ public class PostService {
             Image image = imageRepository.findById(imageId)
                     .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
 
+            image.setPost(post);
+            image.setDisplayOrder(i + 1); // 1-indexed
+            imageRepository.save(image);
+        }
+    }
+
+    /**
+     * Update images for an existing post
+     * - Detaches images not in the new list
+     * - Attaches new images
+     * - Updates display order
+     */
+    private void updatePostImages(Post post, List<Long> newImageIds, User currentUser) {
+        // Validate the new image list
+        if (newImageIds.size() > 10) {
+            throw new IllegalArgumentException("Cannot attach more than 10 images to a post");
+        }
+
+        // Get current images attached to this post
+        List<Image> currentImages = imageRepository.findByPostIdOrderByDisplayOrderAsc(post.getId());
+
+        // Detach images that are no longer in the list
+        for (Image currentImage : currentImages) {
+            if (!newImageIds.contains(currentImage.getId())) {
+                // This image should be removed from the post
+                currentImage.setPost(null);
+                currentImage.setDisplayOrder(0);
+                imageRepository.save(currentImage);
+            }
+        }
+
+        // Process new images list
+        for (int i = 0; i < newImageIds.size(); i++) {
+            Long imageId = newImageIds.get(i);
+            Image image = imageRepository.findById(imageId)
+                    .orElseThrow(() -> new IllegalArgumentException("Image not found: " + imageId));
+
+            // Verify ownership
+            if (!image.getUploader().getId().equals(currentUser.getId())) {
+                throw new IllegalArgumentException("You can only attach your own images");
+            }
+
+            // Check if image is deleted
+            if (image.isDeleted()) {
+                throw new IllegalArgumentException("Cannot attach deleted image: " + imageId);
+            }
+
+            // Check if image is already attached to different content
+            if (image.getPost() != null && !image.getPost().getId().equals(post.getId())) {
+                throw new IllegalArgumentException("Image " + imageId + " is already attached to another post");
+            }
+
+            if (image.getComment() != null) {
+                throw new IllegalArgumentException("Image " + imageId + " is already attached to a comment");
+            }
+
+            // Attach or update the image
             image.setPost(post);
             image.setDisplayOrder(i + 1); // 1-indexed
             imageRepository.save(image);
