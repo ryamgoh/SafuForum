@@ -22,6 +22,7 @@ export default function PostDetail() {
   const [commentContent, setCommentContent] = useState('');
   const [commentImageIds, setCommentImageIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [commentFormKey, setCommentFormKey] = useState(0); // Key to force ImageUploader remount
   const [postVoteScore, setPostVoteScore] = useState<VoteScore>({ score: 0, userVote: null });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -116,6 +117,7 @@ export default function PostDetail() {
       });
       setCommentContent('');
       setCommentImageIds([]);
+      setCommentFormKey(prev => prev + 1); // Force ImageUploader to remount and clear
       fetchComments();
       toast.success('Comment posted!');
     } catch (error) {
@@ -435,6 +437,7 @@ export default function PostDetail() {
             />
             <div className="mt-4">
               <ImageUploader
+                key={commentFormKey}
                 maxImages={3}
                 onImagesChange={setCommentImageIds}
                 disabled={submitting}

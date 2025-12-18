@@ -24,6 +24,7 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [replyImageIds, setReplyImageIds] = useState<number[]>([]);
+  const [replyFormKey, setReplyFormKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -70,6 +71,7 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
       await onReply(comment.id, replyContent, replyImageIds);
       setReplyContent('');
       setReplyImageIds([]);
+      setReplyFormKey(prev => prev + 1); // Force ImageUploader to remount and clear
       setIsReplying(false);
       if (onUpdate) onUpdate();
     } catch (error) {
@@ -316,6 +318,7 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                     />
                     <div className="mt-2">
                       <ImageUploader
+                        key={replyFormKey}
                         maxImages={3}
                         onImagesChange={setReplyImageIds}
                         disabled={submitting}
@@ -328,6 +331,7 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                           setIsReplying(false);
                           setReplyContent('');
                           setReplyImageIds([]);
+                          setReplyFormKey(prev => prev + 1); // Clear ImageUploader
                         }}
                         className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
                       >
