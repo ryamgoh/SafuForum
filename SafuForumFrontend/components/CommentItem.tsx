@@ -24,8 +24,8 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
   const [replyImageIds, setReplyImageIds] = useState<number[]>([]);
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
@@ -71,6 +71,7 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
       setReplyContent('');
       setReplyImageIds([]);
       setIsReplying(false);
+      if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Failed to submit reply:', error);
     } finally {
@@ -271,13 +272,24 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                   </div>
 
                   {/* Reply button */}
-                  <button
-                    onClick={() => setIsReplying(!isReplying)}
-                    className="text-gray-500 hover:text-primary-600 font-medium flex items-center space-x-1"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>{isReplying ? 'Cancel' : 'Reply'}</span>
-                  </button>
+                  {currentUser ? (
+                    <button
+                      onClick={() => setIsReplying(!isReplying)}
+                      className="text-gray-500 hover:text-primary-600 font-medium flex items-center space-x-1"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>{isReplying ? 'Cancel' : 'Reply'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="text-gray-400 font-medium flex items-center space-x-1 cursor-not-allowed"
+                      title="Please log in to reply"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Reply</span>
+                    </button>
+                  )}
 
                   {/* Collapse button (only if has replies) */}
                   {hasReplies && (
@@ -311,6 +323,7 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                     </div>
                     <div className="flex justify-end space-x-2 mt-2">
                       <button
+                        type="button"
                         onClick={() => {
                           setIsReplying(false);
                           setReplyContent('');

@@ -126,11 +126,7 @@ export default function PostDetail() {
     }
   };
 
-  const handleReply = async (
-    parentCommentId: number,
-    content: string,
-    imageIds?: number[]
-  ) => {
+  const handleReply = async (parentCommentId: number, content: string, imageIds?: number[]) => {
     try {
       await commentsApi.create({
         postId: Number(params.id),
@@ -138,7 +134,6 @@ export default function PostDetail() {
         content: content,
         imageIds: imageIds && imageIds.length > 0 ? imageIds : undefined,
       });
-      fetchComments();
       toast.success('Reply posted!');
     } catch (error) {
       toast.error('Please login to reply');
@@ -161,7 +156,6 @@ export default function PostDetail() {
   const handleSaveEdit = async () => {
     if (!editTitle.trim() || !editContent.trim()) {
       toast.error('Title and content are required');
-      return;
     }
 
     try {
@@ -177,7 +171,6 @@ export default function PostDetail() {
       fetchPost();
       toast.success('Post updated successfully!');
     } catch (error) {
-      console.error('Failed to update post:', error);
       toast.error('Failed to update post');
     } finally {
       setSaving(false);
@@ -278,18 +271,15 @@ export default function PostDetail() {
                 maxImages={10}
                 initialImages={post?.images}
                 onImagesChange={setEditImageIds}
-                disabled={saving}
               />
-              <p className="text-sm text-gray-500 mt-2">
-                Upload up to 10 images (PNG, JPG, GIF, WebP, max 10MB each)
-              </p>
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <div className="flex justify-end space-x-3">
               <button
+                type="button"
                 onClick={handleCancelEdit}
                 disabled={saving}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -430,31 +420,37 @@ export default function PostDetail() {
           {comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}
         </h2>
 
-        <form onSubmit={handleSubmitComment} className="mb-8">
-          <textarea
-            value={commentContent}
-            onChange={(e) => setCommentContent(e.target.value)}
-            placeholder="Write a comment..."
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-            rows={4}
-          />
-          <div className="mt-4">
-            <ImageUploader
-              maxImages={3}
-              onImagesChange={setCommentImageIds}
-              disabled={submitting}
+        {!currentUser ? (
+          <div className="mb-8 p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
+            <p className="text-gray-600">Please log in to post comments.</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmitComment} className="mb-8">
+            <textarea
+              value={commentContent}
+              onChange={(e) => setCommentContent(e.target.value)}
+              placeholder="Write a comment..."
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              rows={4}
             />
-          </div>
-          <div className="flex justify-end mt-3">
-            <button
-              type="submit"
-              disabled={submitting || !commentContent.trim()}
-              className="bg-primary-600 hover:bg-primary-700 text-white font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? 'Posting...' : 'Post Comment'}
-            </button>
-          </div>
-        </form>
+            <div className="mt-4">
+              <ImageUploader
+                maxImages={3}
+                onImagesChange={setCommentImageIds}
+                disabled={submitting}
+              />
+            </div>
+            <div className="flex justify-end mt-3">
+              <button
+                type="submit"
+                disabled={submitting || !commentContent.trim()}
+                className="bg-primary-600 hover:bg-primary-700 text-white font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Posting...' : 'Post Comment'}
+              </button>
+            </div>
+          </form>
+        )}
 
         <CommentList 
           comments={comments} 
