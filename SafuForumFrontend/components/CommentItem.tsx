@@ -31,6 +31,7 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
+  const [editImageIds, setEditImageIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Delete state
@@ -84,11 +85,13 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
   const handleStartEdit = () => {
     setIsEditing(true);
     setEditContent(comment.content);
+    setEditImageIds(comment.images?.map(img => img.id) || []);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditContent(comment.content);
+    setEditImageIds(comment.images?.map(img => img.id) || []);
   };
 
   const handleSaveEdit = async () => {
@@ -99,7 +102,10 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
 
     try {
       setSaving(true);
-      await commentsApi.update(comment.id, { content: editContent });
+      await commentsApi.update(comment.id, {
+        content: editContent,
+        imageIds: editImageIds
+      });
       setIsEditing(false);
       toast.success('Comment updated successfully!');
       if (onUpdate) onUpdate();
@@ -212,6 +218,14 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none"
                       rows={3}
                     />
+                    <div className="mt-2">
+                      <ImageUploader
+                        maxImages={3}
+                        initialImages={comment.images}
+                        onImagesChange={setEditImageIds}
+                        disabled={saving}
+                      />
+                    </div>
                     <div className="flex justify-end space-x-2">
                       <button
                         onClick={handleCancelEdit}
