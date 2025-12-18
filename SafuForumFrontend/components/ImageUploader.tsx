@@ -81,11 +81,27 @@ export default function ImageUploader({
         toast.success(`${file.name} uploaded successfully`);
       } catch (error: any) {
         console.error('Upload error:', error);
-        // Extract backend error message or use generic fallback
-        const errorMessage = error.response?.data?.error ||
-                           error.response?.data?.message ||
-                           error.message ||
-                           'Upload failed';
+
+        // Extract backend error message with better handling
+        let errorMessage = 'Upload failed';
+
+        if (error.response?.data) {
+          // Handle JSON error responses
+          if (typeof error.response.data === 'object') {
+            errorMessage = error.response.data.message ||
+                          error.response.data.error ||
+                          errorMessage;
+          }
+          // Handle string error responses
+          else if (typeof error.response.data === 'string') {
+            errorMessage = error.response.data;
+          }
+        }
+        // Fallback to error message
+        else if (error.message) {
+          errorMessage = error.message;
+        }
+
         toast.error(`${file.name}: ${errorMessage}`);
       }
     }
