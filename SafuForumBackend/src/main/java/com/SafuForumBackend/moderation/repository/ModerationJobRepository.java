@@ -16,9 +16,18 @@ public interface ModerationJobRepository extends JpaRepository<ModerationJob, Lo
 
   List<ModerationJob> findByPostIdAndPostVersion(Long postId, Integer postVersion);
 
-  List<ModerationJob> findByStatusAndCreatedAtBefore(ModerationStatus status, LocalDateTime cutoff);
+  @Query("""
+      SELECT mj
+      FROM ModerationJob mj
+      JOIN FETCH mj.post
+      WHERE mj.status = :status
+        AND mj.createdAt < :cutoff
+      """)
+  List<ModerationJob> findByStatusAndCreatedAtBefore(
+      @Param("status") ModerationStatus status,
+      @Param("cutoff") LocalDateTime cutoff);
 
-  @Modifying
+  @Modifying(clearAutomatically = true)
   @Query("""
       UPDATE ModerationJob mj
       SET mj.status = :toStatus,
