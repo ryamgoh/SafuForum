@@ -1,6 +1,18 @@
 Project safu_forum_db {
   database_type: 'PostgreSQL'
-  Note: 'Derived from Flyway migrations in SafuForumBackend/src/main/resources/db/migration (V1-V9)'
+  Note: 'Derived from Flyway migrations in SafuForumBackend/src/main/resources/db/migration (V1-V14)'
+}
+
+Enum moderation_status {
+  pending
+  approved
+  rejected
+  failed
+}
+
+Enum job_content_type {
+  text
+  image
 }
 
 Table users {
@@ -50,6 +62,8 @@ Table posts {
   author_id bigint [not null]
   title varchar(300) [not null]
   content text [not null]
+  status moderation_status [not null, default: 'pending']
+  version integer [not null, default: 1]
   is_deleted boolean [not null, default: false]
   created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
   updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
@@ -58,6 +72,7 @@ Table posts {
     (author_id) [name: 'idx_posts_author']
     (created_at) [name: 'idx_posts_created', note: 'created_at DESC']
     (is_deleted, created_at) [name: 'idx_posts_deleted_created', note: 'created_at DESC']
+    (status) [name: 'idx_posts_moderation_status']
   }
 }
 
@@ -76,6 +91,31 @@ Table comments {
     (author_id) [name: 'idx_comments_author']
     (parent_comment_id) [name: 'idx_comments_parent']
     (created_at) [name: 'idx_comments_created']
+  }
+}
+
+Table images {
+  id bigint [pk, increment]
+  uploader_id bigint [not null]
+  post_id bigint
+  comment_id bigint
+  display_order integer [not null]
+  seaweedfs_fid varchar(255) [not null]
+  seaweedfs_url varchar(500) [not null]
+  original_filename varchar(255) [not null]
+  file_size_bytes bigint [not null]
+  mime_type varchar(50) [not null]
+  upload_status varchar(20) [not null, default: 'COMPLETED']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  deleted_at timestamp
+
+  Note: 'CHECK: (post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL) OR (post_id IS NULL AND comment_id IS NULL)'
+
+  Indexes {
+    (uploader_id) [name: 'idx_images_uploader']
+    (post_id) [name: 'idx_images_post', note: 'Partial: WHERE post_id IS NOT NULL']
+    (comment_id) [name: 'idx_images_comment', note: 'Partial: WHERE comment_id IS NOT NULL']
+    (created_at) [name: 'idx_images_created', note: 'Partial: WHERE deleted_at IS NULL']
   }
 }
 
@@ -163,6 +203,24 @@ Table content_flags {
   }
 }
 
+Table moderation_jobs {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  post_version integer [not null]
+  source_field varchar(100) [not null]
+  content_type job_content_type [not null]
+  payload text [not null]
+  status moderation_status [not null, default: 'pending']
+  error_message text
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    (post_id, post_version) [name: 'idx_mod_jobs_post_v']
+    (status) [name: 'idx_mod_jobs_status']
+  }
+}
+
 Ref: refresh_tokens.user_id > users.id [delete: cascade]
 
 Ref: posts.author_id > users.id [delete: cascade]
@@ -171,12 +229,18 @@ Ref: comments.post_id > posts.id [delete: cascade]
 Ref: comments.author_id > users.id [delete: cascade]
 Ref: comments.parent_comment_id > comments.id [delete: cascade]
 
+Ref: images.uploader_id > users.id [delete: cascade]
+Ref: images.post_id > posts.id [delete: cascade]
+Ref: images.comment_id > comments.id [delete: cascade]
+
 Ref: votes.user_id > users.id [delete: cascade]
 Ref: votes.post_id > posts.id [delete: cascade]
 Ref: votes.comment_id > comments.id [delete: cascade]
 
 Ref: post_tags.post_id > posts.id [delete: cascade]
 Ref: post_tags.tag_id > tags.id [delete: cascade]
+
+Ref: moderation_jobs.post_id > posts.id [delete: cascade]
 
 Ref: moderation_actions.moderator_id > users.id [delete: cascade]
 Ref: moderation_actions.target_user_id > users.id [delete: set null]

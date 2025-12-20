@@ -72,6 +72,7 @@ cd SafuForumBackend
 ./gradlew bootRun
 ```
 - If you want to use the Postgres DB created by Docker Compose, set `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/safuforum`.
+- If you want image uploads to use the SeaweedFS container, set `SEAWEEDFS_S3_ENDPOINT=http://localhost:8333` (the in-Docker default is `http://seaweed-s3:8333`).
 
 Run the frontend:
 ```bash
@@ -87,15 +88,18 @@ npm run dev
 - After login, the backend redirects to `http://localhost:3000/auth/callback` with `accessToken` and `refreshToken` query params.
 
 ## SeaweedFS (S3-compatible)
-- S3 endpoint: `http://localhost:8333`
+- S3 endpoint (from host): `http://localhost:8333`
+- S3 endpoint (from backend container): `http://seaweed-s3:8333` (default; override with `SEAWEEDFS_S3_ENDPOINT`)
 - Filer UI: `http://localhost:8888`
 - Credentials (from `s3_identity.json`): access key `dev`, secret key `dev`
+- Default bucket (backend): `safu-forum-images` (auto-created on first upload)
 - Example (awscli):
   - `AWS_ACCESS_KEY_ID=dev AWS_SECRET_ACCESS_KEY=dev aws s3api --endpoint-url http://localhost:8333 list-buckets`
 
 ## Repo layout
 - `SafuForumFrontend/` – Next.js app
 - `SafuForumBackend/` – Spring Boot app (Flyway migrations in `src/main/resources/db/migration`)
+- `SafuForumBackend/schema.dbml` – database diagram (derived from Flyway migrations)
 - `docker-compose.yml` – local stack orchestration
 - `ai/` – ML training artifacts/models (not used by the runtime app)
 - `apps/` – experiments/prototypes
