@@ -30,7 +30,7 @@ public class ModerationJob {
     @Column(name = "post_version", nullable = false)
     private Integer postVersion;
 
-    @Column(name = "source_field", nullable = false, length = 50)
+    @Column(name = "source_field", nullable = false, length = 100)
     private String sourceField;
 
     @Enumerated(EnumType.STRING)

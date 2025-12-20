@@ -1,4 +1,4 @@
--- V11: Add moderation tracking to the posts table
+-- V13: Add moderation tracking to the posts table
 ALTER TABLE posts 
     ADD COLUMN status moderation_status NOT NULL DEFAULT 'pending',
     ADD COLUMN version integer NOT NULL DEFAULT 1;
