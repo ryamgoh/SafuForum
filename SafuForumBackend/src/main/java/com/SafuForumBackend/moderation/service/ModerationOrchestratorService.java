@@ -139,10 +139,6 @@ public class ModerationOrchestratorService {
         rabbitTemplate.convertAndSend(amqpProperties.getIngressTopicExchange(), routingKey, event, message -> {
             message.getMessageProperties().setCorrelationId(job.getId().toString());
             message.getMessageProperties().setMessageId(job.getId().toString());
-            message.getMessageProperties().setHeader("postId", job.getPost().getId());
-            message.getMessageProperties().setHeader("postVersion", job.getPostVersion());
-            message.getMessageProperties().setHeader("sourceField", job.getSourceField());
-            message.getMessageProperties().setHeader("contentType", job.getContentType().name());
             return message;
         });
     }
