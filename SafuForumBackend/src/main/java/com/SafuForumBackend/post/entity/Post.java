@@ -1,5 +1,6 @@
 package com.SafuForumBackend.post.entity;
 
+import com.SafuForumBackend.image.entity.Image;
 import com.SafuForumBackend.moderation.enums.ModerationStatus;
 import com.SafuForumBackend.user.entity.User;
 import com.SafuForumBackend.tag.entity.Tag;
@@ -9,7 +10,9 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -61,6 +64,11 @@ public class Post {
     @JoinTable(name = "post_tags", joinColumns = @JoinColumn(name = "post_id"), inverseJoinColumns = @JoinColumn(name = "tag_id"))
     @Builder.Default
     private Set<Tag> tags = new HashSet<>();
+
+    @OneToMany(mappedBy = "post", fetch = FetchType.LAZY)
+    @OrderBy("displayOrder ASC")
+    @Builder.Default
+    private List<Image> images = new ArrayList<>();
 
     public void addTag(Tag tag) {
         this.tags.add(tag);
