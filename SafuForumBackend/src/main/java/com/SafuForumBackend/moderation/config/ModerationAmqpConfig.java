@@ -13,41 +13,19 @@ public class ModerationAmqpConfig {
 
     @Bean
     public TopicExchange moderationIngressExchange() {
-        return new TopicExchange(properties.getIngressExchange(), true, false);
+        return new TopicExchange(properties.getIngressTopicExchange(), true, false);
     }
 
     @Bean
-    public DirectExchange moderationResultsExchange() {
-        return new DirectExchange(properties.getResultsExchange(), true, false);
+    public Queue moderationJobCompletedQueue() {
+        return new Queue(properties.getQueues().getJobCompleted(), true);
     }
 
     @Bean
-    public TopicExchange moderationDecisionsExchange() {
-        return new TopicExchange(properties.getDecisionsExchange(), true, false);
-    }
-
-    @Bean
-    public Queue moderationResultsBackendQueue() {
-        return new Queue(properties.getQueues().getResultsBackend(), true);
-    }
-
-    @Bean
-    public Binding moderationResultsBackendBinding(Queue moderationResultsBackendQueue,
-            DirectExchange moderationResultsExchange) {
-        return BindingBuilder.bind(moderationResultsBackendQueue)
-                .to(moderationResultsExchange)
-                .with(properties.getRouting().getJobResult());
-    }
-
-    @Bean
-    public Queue moderationNotifyQueue() {
-        return new Queue(properties.getQueues().getNotify(), true);
-    }
-
-    @Bean
-    public Binding moderationNotifyBinding(Queue moderationNotifyQueue, TopicExchange moderationDecisionsExchange) {
-        return BindingBuilder.bind(moderationNotifyQueue)
-                .to(moderationDecisionsExchange)
-                .with(properties.getRouting().getPostCompleted());
+    public Binding moderationJobCompletedBinding(Queue moderationJobCompletedQueue,
+            TopicExchange moderationIngressExchange) {
+        return BindingBuilder.bind(moderationJobCompletedQueue)
+                .to(moderationIngressExchange)
+                .with(properties.getRouting().getJobCompleted());
     }
 }

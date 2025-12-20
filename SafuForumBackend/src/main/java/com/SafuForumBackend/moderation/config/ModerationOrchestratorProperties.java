@@ -16,4 +16,3 @@ public class ModerationOrchestratorProperties {
     private Duration jobTimeout = Duration.ofMinutes(10);
     private Duration timeoutCheckInterval = Duration.ofMinutes(1);
 }
-
