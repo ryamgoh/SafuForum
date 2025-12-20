@@ -63,14 +63,10 @@ moderation:
     job-timeout: 10m
     timeout-check-interval: 1m
   amqp:
-    ingress-exchange: safu.moderation.ingress
-    results-exchange: safu.moderation.results
-    decisions-exchange: safu.moderation.decisions
+    ingress-exchange: x.moderation.ingress
     routing:
       text-job: moderation.job.text
       image-job: moderation.job.image
-      job-result: moderation.job.result
-      post-completed: moderation.post.completed
+      job-completed: moderation.job.completed
     queues:
-      results-backend: safu.moderation.results.backend
-      notify: safu.moderation.notify
+      job-completed: q.moderation.job.completed
