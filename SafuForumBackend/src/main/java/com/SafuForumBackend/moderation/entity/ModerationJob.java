@@ -63,4 +63,3 @@ public class ModerationJob {
         this.updatedAt = LocalDateTime.now();
     }
 }
-
