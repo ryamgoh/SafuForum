@@ -9,6 +9,8 @@ import com.SafuForumBackend.tag.repository.TagRepository;
 import com.SafuForumBackend.user.dto.UserSummaryResponse;
 import com.SafuForumBackend.user.entity.User;
 import com.SafuForumBackend.comment.repository.CommentRepository;
+import com.SafuForumBackend.moderation.enums.ModerationStatus;
+import com.SafuForumBackend.moderation.service.ModerationOrchestratorService;
 import com.SafuForumBackend.vote.repository.VoteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -30,6 +32,7 @@ public class PostService {
     private final TagRepository tagRepository;
     private final VoteRepository voteRepository;
     private final CommentRepository commentRepository;
+    private final ModerationOrchestratorService moderationOrchestratorService;
 
     @Transactional
     public PostResponse createPost(CreatePostRequest request, User currentUser) {
@@ -47,6 +50,7 @@ public class PostService {
         }
 
         Post savedPost = postRepository.save(post);
+        moderationOrchestratorService.enqueueModerationForPost(savedPost, null);
         return convertToResponse(savedPost);
     }
 
@@ -63,7 +67,7 @@ public class PostService {
 
     public Page<PostResponse> getAllPosts(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Post> posts = postRepository.findByIsDeletedFalse(pageable);  // CHANGED
+        Page<Post> posts = postRepository.findByIsDeletedFalse(pageable); // CHANGED
         return posts.map(this::convertToResponse);
     }
 
@@ -106,9 +110,12 @@ public class PostService {
             throw new RuntimeException("You don't have permission to edit this post");
         }
 
+        Integer previousVersion = post.getVersion();
         post.setTitle(request.getTitle());
         post.setContent(request.getContent());
         post.setUpdatedAt(LocalDateTime.now());
+        post.setStatus(ModerationStatus.pending);
+        post.setVersion(previousVersion + 1);
 
         post.clearTags();
         if (request.getTags() != null && !request.getTags().isEmpty()) {
@@ -119,6 +126,7 @@ public class PostService {
         }
 
         Post updatedPost = postRepository.save(post);
+        moderationOrchestratorService.enqueueModerationForPost(updatedPost, previousVersion);
         return convertToResponse(updatedPost);
     }
 
@@ -154,8 +162,7 @@ public class PostService {
                 post.getAuthor().getUsername(),
                 post.getAuthor().getDisplayName(),
                 post.getAuthor().getAvatarUrl(),
-                post.getAuthor().getReputation()
-        );
+                post.getAuthor().getReputation());
 
         List<TagResponse> tags = post.getTags().stream()
                 .map(tag -> new TagResponse(
@@ -163,7 +170,7 @@ public class PostService {
                         tag.getName(),
                         tag.getSlug(),
                         tag.getColor(),
-                        null  // ADD THIS - postCount not needed when showing post tags
+                        null // ADD THIS - postCount not needed when showing post tags
                 ))
                 .collect(Collectors.toList());
 

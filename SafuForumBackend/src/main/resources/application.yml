@@ -3,7 +3,7 @@ spring:
     name: forum-app
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/safu_forum_db
+    url: jdbc:postgresql://localhost:5432/${DB_NAME:safuforum}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -57,3 +57,20 @@ jwt:
   access-token-expiration: 900000
   refresh-token-expiration: 2592000000
   expiration: 86400000
+
+moderation:
+  orchestrator:
+    job-timeout: 10m
+    timeout-check-interval: 1m
+  amqp:
+    ingress-exchange: safu.moderation.ingress
+    results-exchange: safu.moderation.results
+    decisions-exchange: safu.moderation.decisions
+    routing:
+      text-job: moderation.job.text
+      image-job: moderation.job.image
+      job-result: moderation.job.result
+      post-completed: moderation.post.completed
+    queues:
+      results-backend: safu.moderation.results.backend
+      notify: safu.moderation.notify
