@@ -1,4 +1,4 @@
-Project safu_forum_db {
+Project safuforum {
   database_type: 'PostgreSQL'
   Note: 'Derived from Flyway migrations in SafuForumBackend/src/main/resources/db/migration (V1-V14)'
 }
