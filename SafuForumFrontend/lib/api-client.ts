@@ -5,13 +5,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // REMOVED: Don't set Content-Type globally - let axios handle it per request
   withCredentials: true,
 });
 
-// Add access token to requests if available
+// Add access token and conditionally set Content-Type
 apiClient.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
@@ -20,6 +18,17 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
+
+    // Only set Content-Type to JSON if it's not already set and it's not FormData
+    if (!config.headers['Content-Type'] && !(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+
+    // If it's FormData, delete Content-Type to let browser set it with boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+
     return config;
   },
   (error) => {
@@ -84,4 +93,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-

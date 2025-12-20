@@ -8,6 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { MessageSquare, ArrowUp, ArrowDown } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
+import { getImageUrl } from '@/lib/image-utils';
 
 interface PostCardProps {
   post: Post;
@@ -100,6 +101,31 @@ export default function PostCard({ post }: PostCardProps) {
           </Link>
 
           <p className="text-gray-600 mb-4 line-clamp-2">{post.content}</p>
+
+          {/* Image Previews */}
+          {post.images && post.images.length > 0 && (
+            <div className="flex gap-2 mb-4 overflow-hidden">
+              {post.images.slice(0, 3).map((image, index) => (
+                <div
+                  key={image.id}
+                  className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 flex-shrink-0"
+                >
+                  <Image
+                    src={getImageUrl(image.url)}
+                    alt={image.originalFilename}
+                    fill
+                    className="object-cover"
+                    sizes="80px"
+                  />
+                </div>
+              ))}
+              {post.images.length > 3 && (
+                <div className="w-20 h-20 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-sm font-medium text-gray-600 flex-shrink-0">
+                  +{post.images.length - 3}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tags */}
           {post.tags && post.tags.length > 0 && (

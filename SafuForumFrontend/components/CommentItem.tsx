@@ -8,11 +8,13 @@ import { formatDistanceToNow } from 'date-fns';
 import { ArrowUp, ArrowDown, MessageSquare, ChevronDown, ChevronRight, Edit, Trash2, X } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
+import ImageGallery from './ImageGallery';
+import ImageUploader from './ImageUploader';
 
 interface CommentItemProps {
   comment: Comment;
   depth?: number;
-  onReply: (commentId: number, content: string) => Promise<void>;
+  onReply: (commentId: number, content: string, imageIds?: number[]) => Promise<void>;
   onUpdate?: () => void;
   currentUser?: User | null;
 }
@@ -21,12 +23,15 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
   const [voteScore, setVoteScore] = useState({ score: 0, userVote: null as number | null });
   const [isReplying, setIsReplying] = useState(false);
   const [replyContent, setReplyContent] = useState('');
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [replyImageIds, setReplyImageIds] = useState<number[]>([]);
+  const [replyFormKey, setReplyFormKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
+  const [editImageIds, setEditImageIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Delete state
@@ -64,9 +69,12 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
 
     try {
       setSubmitting(true);
-      await onReply(comment.id, replyContent);
+      await onReply(comment.id, replyContent, replyImageIds);
       setReplyContent('');
+      setReplyImageIds([]);
+      setReplyFormKey(prev => prev + 1); // Force ImageUploader to remount and clear
       setIsReplying(false);
+      if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Failed to submit reply:', error);
     } finally {
@@ -77,11 +85,13 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
   const handleStartEdit = () => {
     setIsEditing(true);
     setEditContent(comment.content);
+    setEditImageIds(comment.images?.map(img => img.id) || []);
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditContent(comment.content);
+    setEditImageIds(comment.images?.map(img => img.id) || []);
   };
 
   const handleSaveEdit = async () => {
@@ -92,7 +102,10 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
 
     try {
       setSaving(true);
-      await commentsApi.update(comment.id, { content: editContent });
+      await commentsApi.update(comment.id, {
+        content: editContent,
+        imageIds: editImageIds
+      });
       setIsEditing(false);
       toast.success('Comment updated successfully!');
       if (onUpdate) onUpdate();
@@ -205,6 +218,14 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none"
                       rows={3}
                     />
+                    <div className="mt-2">
+                      <ImageUploader
+                        maxImages={3}
+                        initialImages={comment.images}
+                        onImagesChange={setEditImageIds}
+                        disabled={saving}
+                      />
+                    </div>
                     <div className="flex justify-end space-x-2">
                       <button
                         onClick={handleCancelEdit}
@@ -223,9 +244,17 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                     </div>
                   </div>
                 ) : (
-                  <p className="text-gray-700 text-sm mb-2 whitespace-pre-wrap">
-                    {comment.content}
-                  </p>
+                  <>
+                    <p className="text-gray-700 text-sm mb-2 whitespace-pre-wrap">
+                      {comment.content}
+                    </p>
+                    {/* Images */}
+                    {comment.images && comment.images.length > 0 && (
+                      <div className="mb-3">
+                        <ImageGallery images={comment.images} columns={3} size="small" />
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Actions */}
@@ -259,13 +288,24 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                   </div>
 
                   {/* Reply button */}
-                  <button
-                    onClick={() => setIsReplying(!isReplying)}
-                    className="text-gray-500 hover:text-primary-600 font-medium flex items-center space-x-1"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>{isReplying ? 'Cancel' : 'Reply'}</span>
-                  </button>
+                  {currentUser ? (
+                    <button
+                      onClick={() => setIsReplying(!isReplying)}
+                      className="text-gray-500 hover:text-primary-600 font-medium flex items-center space-x-1"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>{isReplying ? 'Cancel' : 'Reply'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      disabled
+                      className="text-gray-400 font-medium flex items-center space-x-1 cursor-not-allowed"
+                      title="Please log in to reply"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Reply</span>
+                    </button>
+                  )}
 
                   {/* Collapse button (only if has replies) */}
                   {hasReplies && (
@@ -290,11 +330,22 @@ export default function CommentItem({ comment, depth = 0, onReply, onUpdate, cur
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm resize-none"
                       rows={3}
                     />
+                    <div className="mt-2">
+                      <ImageUploader
+                        key={replyFormKey}
+                        maxImages={3}
+                        onImagesChange={setReplyImageIds}
+                        disabled={submitting}
+                      />
+                    </div>
                     <div className="flex justify-end space-x-2 mt-2">
                       <button
+                        type="button"
                         onClick={() => {
                           setIsReplying(false);
                           setReplyContent('');
+                          setReplyImageIds([]);
+                          setReplyFormKey(prev => prev + 1); // Clear ImageUploader
                         }}
                         className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900"
                       >

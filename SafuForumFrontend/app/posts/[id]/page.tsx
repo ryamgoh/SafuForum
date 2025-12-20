@@ -10,6 +10,8 @@ import Link from 'next/link';
 import CommentList from '@/components/CommentList';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
+import ImageGallery from '@/components/ImageGallery';
+import ImageUploader from '@/components/ImageUploader';
 
 export default function PostDetail() {
   const params = useParams();
@@ -18,7 +20,9 @@ export default function PostDetail() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentContent, setCommentContent] = useState('');
+  const [commentImageIds, setCommentImageIds] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [commentFormKey, setCommentFormKey] = useState(0); // Key to force ImageUploader remount
   const [postVoteScore, setPostVoteScore] = useState<VoteScore>({ score: 0, userVote: null });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -27,6 +31,7 @@ export default function PostDetail() {
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editTags, setEditTags] = useState('');
+  const [editImageIds, setEditImageIds] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Delete state
@@ -58,6 +63,7 @@ export default function PostDetail() {
       setEditTitle(response.data.title);
       setEditContent(response.data.content);
       setEditTags(response.data.tags?.map(t => t.name).join(', ') || '');
+      setEditImageIds(response.data.images?.map(img => img.id) || []);
     } catch (error) {
       console.error('Failed to fetch post:', error);
       toast.error('Failed to load post');
@@ -107,8 +113,11 @@ export default function PostDetail() {
       await commentsApi.create({
         postId: Number(params.id),
         content: commentContent,
+        imageIds: commentImageIds.length > 0 ? commentImageIds : undefined,
       });
       setCommentContent('');
+      setCommentImageIds([]);
+      setCommentFormKey(prev => prev + 1); // Force ImageUploader to remount and clear
       fetchComments();
       toast.success('Comment posted!');
     } catch (error) {
@@ -119,14 +128,14 @@ export default function PostDetail() {
     }
   };
 
-  const handleReply = async (parentCommentId: number, content: string) => {
+  const handleReply = async (parentCommentId: number, content: string, imageIds?: number[]) => {
     try {
       await commentsApi.create({
         postId: Number(params.id),
         parentCommentId: parentCommentId,
         content: content,
+        imageIds: imageIds && imageIds.length > 0 ? imageIds : undefined,
       });
-      fetchComments();
       toast.success('Reply posted!');
     } catch (error) {
       toast.error('Please login to reply');
@@ -143,12 +152,12 @@ export default function PostDetail() {
     setEditTitle(post?.title || '');
     setEditContent(post?.content || '');
     setEditTags(post?.tags?.map(t => t.name).join(', ') || '');
+    setEditImageIds(post?.images?.map(img => img.id) || []);
   };
 
   const handleSaveEdit = async () => {
     if (!editTitle.trim() || !editContent.trim()) {
       toast.error('Title and content are required');
-      return;
     }
 
     try {
@@ -157,13 +166,13 @@ export default function PostDetail() {
         title: editTitle,
         content: editContent,
         tags: editTags.split(',').map(t => t.trim()).filter(Boolean),
+        imageIds: editImageIds,
       });
 
       setIsEditing(false);
       fetchPost();
       toast.success('Post updated successfully!');
     } catch (error) {
-      console.error('Failed to update post:', error);
       toast.error('Failed to update post');
     } finally {
       setSaving(false);
@@ -256,11 +265,23 @@ export default function PostDetail() {
               />
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Images
+              </label>
+              <ImageUploader
+                maxImages={10}
+                initialImages={post?.images}
+                onImagesChange={setEditImageIds}
+              />
+            </div>
+
+            <div className="flex justify-end space-x-3">
               <button
+                type="button"
                 onClick={handleCancelEdit}
                 disabled={saving}
-                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -355,6 +376,13 @@ export default function PostDetail() {
               <p className="text-gray-700 whitespace-pre-wrap">{post.content}</p>
             </div>
 
+            {/* Images */}
+            {post.images && post.images.length > 0 && (
+              <div className="mb-6">
+                <ImageGallery images={post.images} columns={3} size="medium" />
+              </div>
+            )}
+
             {/* Vote Section */}
             <div className="flex items-center space-x-4 pt-6 border-t border-gray-200">
               <div className="flex items-center space-x-2">
@@ -394,27 +422,41 @@ export default function PostDetail() {
           {comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}
         </h2>
 
-        <form onSubmit={handleSubmitComment} className="mb-8">
-          <textarea
-            value={commentContent}
-            onChange={(e) => setCommentContent(e.target.value)}
-            placeholder="Write a comment..."
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-            rows={4}
-          />
-          <div className="flex justify-end mt-3">
-            <button
-              type="submit"
-              disabled={submitting || !commentContent.trim()}
-              className="bg-primary-600 hover:bg-primary-700 text-white font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? 'Posting...' : 'Post Comment'}
-            </button>
+        {!currentUser ? (
+          <div className="mb-8 p-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
+            <p className="text-gray-600">Please log in to post comments.</p>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSubmitComment} className="mb-8">
+            <textarea
+              value={commentContent}
+              onChange={(e) => setCommentContent(e.target.value)}
+              placeholder="Write a comment..."
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              rows={4}
+            />
+            <div className="mt-4">
+              <ImageUploader
+                key={commentFormKey}
+                maxImages={3}
+                onImagesChange={setCommentImageIds}
+                disabled={submitting}
+              />
+            </div>
+            <div className="flex justify-end mt-3">
+              <button
+                type="submit"
+                disabled={submitting || !commentContent.trim()}
+                className="bg-primary-600 hover:bg-primary-700 text-white font-medium px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Posting...' : 'Post Comment'}
+              </button>
+            </div>
+          </form>
+        )}
 
-        <CommentList
-          comments={comments}
+        <CommentList 
+          comments={comments} 
           onReply={handleReply}
           onUpdate={fetchComments}
           currentUser={currentUser}
