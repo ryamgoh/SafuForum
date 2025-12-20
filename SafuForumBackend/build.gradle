@@ -28,6 +28,9 @@ dependencies {
     //RabbitMQ
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
 
+    // AWS SDK for S3 (SeaweedFS compatibility)
+    implementation 'software.amazon.awssdk:s3:2.20.26'
+
     // OAuth2
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 

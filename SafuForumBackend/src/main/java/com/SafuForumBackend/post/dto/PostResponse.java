@@ -1,11 +1,13 @@
 package com.SafuForumBackend.post.dto;
 
-import com.SafuForumBackend.user.dto.UserSummaryResponse;
+import com.SafuForumBackend.image.dto.ImageResponse;
 import com.SafuForumBackend.tag.dto.TagResponse;
+import com.SafuForumBackend.user.dto.UserSummaryResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,6 +20,7 @@ public class PostResponse {
     private String title;
     private String content;
     private UserSummaryResponse author;
+    private List<ImageResponse> images;
     private List<TagResponse> tags;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

@@ -17,4 +17,6 @@ public class CreatePostRequest {
     private String content;
 
     private List<String> tags;
+
+    private List<Long> imageIds;
 }

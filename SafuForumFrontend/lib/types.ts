@@ -14,6 +14,25 @@ export interface User {
   lastLoginAt?: string;
 }
 
+// Image types
+export interface ImageResponse {
+  id: number;
+  url: string;
+  originalFilename: string;
+  fileSize: number;
+  mimeType: string;
+  displayOrder: number;
+}
+
+export interface ImageUploadResponse {
+  id: number;
+  url: string;
+  originalFilename: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+}
+
 // Post types
 export interface Post {
   id: number;
@@ -23,6 +42,7 @@ export interface Post {
   commentCount: number;
   voteScore: number;
   tags?: Tag[];
+  images?: ImageResponse[];
   createdAt: string;
   updatedAt: string;
   isDeleted: boolean;
@@ -32,12 +52,14 @@ export interface CreatePostRequest {
   title: string;
   content: string;
   tags?: string[];
+  imageIds?: number[];
 }
 
 export interface UpdatePostRequest {
   title?: string;
   content?: string;
   tags?: string[];
+  imageIds?: number[];
 }
 
 // Comment types
@@ -49,6 +71,7 @@ export interface Comment {
   author: User;
   parentCommentId?: number;
   replies?: Comment[];
+  images?: ImageResponse[];
   createdAt: string;
   updatedAt: string;
   editedAt?: string;
@@ -58,10 +81,12 @@ export interface CreateCommentRequest {
   content: string;
   postId: number;
   parentCommentId?: number;
+  imageIds?: number[];
 }
 
 export interface UpdateCommentRequest {
   content: string;
+  imageIds?: number[];
 }
 
 // Vote types

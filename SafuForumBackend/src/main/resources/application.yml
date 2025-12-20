@@ -2,6 +2,13 @@ spring:
   application:
     name: forum-app
 
+  # File upload configuration
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      enabled: true
+
   datasource:
     url: jdbc:postgresql://localhost:5432/${DB_NAME:safuforum}
     username: ${DB_USERNAME:postgres}
@@ -48,6 +55,13 @@ spring:
             token-uri: https://oauth2.googleapis.com/token
             user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo
             user-name-attribute: sub
+
+    seaweedfs:
+      s3:
+        endpoint: http://localhost:8333
+        access-key: dev
+        secret-key: dev
+        bucket-name: safu-forum-images
 
 server:
   port: 8081

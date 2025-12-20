@@ -13,6 +13,8 @@ import {
   Tag,
   AuthResponse,
   RefreshTokenRequest,
+  ImageResponse,
+  ImageUploadResponse,
 } from './types';
 
 // Posts API
@@ -105,4 +107,27 @@ export const tagsApi = {
   getAll: () => apiClient.get<Tag[]>('/api/tags'),
 
   getBySlug: (slug: string) => apiClient.get<Tag>(`/api/tags/${slug}`),
+};
+
+// Images API
+export const imagesApi = {
+  upload: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiClient.post<ImageUploadResponse>('/api/images/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+
+  getById: (id: number) =>
+    apiClient.get<ImageResponse>(`/api/images/${id}`),
+
+  getForPost: (postId: number) =>
+    apiClient.get<ImageResponse[]>(`/api/images/post/${postId}`),
+
+  getForComment: (commentId: number) =>
+    apiClient.get<ImageResponse[]>(`/api/images/comment/${commentId}`),
+
+  delete: (id: number) =>
+    apiClient.delete(`/api/images/${id}`)
 };
