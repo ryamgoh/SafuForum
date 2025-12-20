@@ -30,6 +30,15 @@ public class PostModerationJobFactory {
             });
         }
 
+        if (post.getImages() != null && !post.getImages().isEmpty()) {
+            post.getImages().forEach(image -> {
+                if (image.getSeaweedfsUrl() != null && !image.getSeaweedfsUrl().isBlank()) {
+                    jobs.add(new ModerationJobSpec("image:" + image.getId(), JobContentType.image,
+                            image.getSeaweedfsUrl()));
+                }
+            });
+        }
+
         return jobs;
     }
 }

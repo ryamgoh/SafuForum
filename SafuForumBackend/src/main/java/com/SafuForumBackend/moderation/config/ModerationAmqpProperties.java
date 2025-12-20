@@ -11,7 +11,8 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "moderation.amqp")
 public class ModerationAmqpProperties {
 
-    private String ingressTopicExchange = "x.moderation.ingress";
+    private String ingressExchange = "x.moderation.ingress";
+    private String resultExchange = "x.moderation.result";
 
     private final Routing routing = new Routing();
     private final Queues queues = new Queues();
@@ -22,6 +23,7 @@ public class ModerationAmqpProperties {
         private String textJob = "moderation.job.text";
         private String imageJob = "moderation.job.image";
         private String jobCompleted = "moderation.job.completed";
+        private String jobResult = "moderation.job.result";
     }
 
     @Getter

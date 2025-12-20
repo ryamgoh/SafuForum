@@ -78,9 +78,11 @@ moderation:
     timeout-check-interval: 1m
   amqp:
     ingress-exchange: x.moderation.ingress
+    result-exchange: x.moderation.result
     routing:
       text-job: moderation.job.text
       image-job: moderation.job.image
       job-completed: moderation.job.completed
+      job-result: moderation.job.result
     queues:
       job-completed: q.moderation.job.completed

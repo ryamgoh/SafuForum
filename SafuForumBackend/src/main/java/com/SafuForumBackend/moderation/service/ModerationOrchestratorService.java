@@ -136,7 +136,7 @@ public class ModerationOrchestratorService {
                 job.getContentType(),
                 job.getPayload());
 
-        rabbitTemplate.convertAndSend(amqpProperties.getIngressTopicExchange(), routingKey, event, message -> {
+        rabbitTemplate.convertAndSend(amqpProperties.getIngressExchange(), routingKey, event, message -> {
             message.getMessageProperties().setCorrelationId(job.getId().toString());
             message.getMessageProperties().setMessageId(job.getId().toString());
             return message;
