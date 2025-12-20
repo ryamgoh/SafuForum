@@ -115,6 +115,7 @@ public class PostService {
         post.setContent(request.getContent());
         post.setUpdatedAt(LocalDateTime.now());
         post.setStatus(ModerationStatus.pending);
+        // Increment version
         post.setVersion(previousVersion + 1);
 
         post.clearTags();
