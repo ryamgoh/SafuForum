@@ -2,6 +2,7 @@ package com.SafuForumBackend.moderation.service;
 
 import com.SafuForumBackend.moderation.config.ModerationAmqpProperties;
 import com.SafuForumBackend.moderation.entity.ModerationJob;
+import com.SafuForumBackend.moderation.entity.ModerationJobSpec;
 import com.SafuForumBackend.moderation.enums.JobContentType;
 import com.SafuForumBackend.moderation.enums.ModerationStatus;
 import com.SafuForumBackend.moderation.event.ModerationJobRequestedEvent;
@@ -42,15 +43,32 @@ public class ModerationOrchestratorService {
 
         markSupersededPendingJobsAsFailed(post, supersededPostVersion);
 
+        List<ModerationJob> savedJobs = createAndSaveJobsForPost(post, postVersion);
+
+        afterCommitExecutor.run(() -> savedJobs.forEach(this::publishJobRequestedEventSafely));
+    }
+
+    /**
+     * Creates and saves moderation jobs for the given post and version.
+     * 
+     * @param post        The post to create jobs for.
+     * @param postVersion The version of the post.
+     * @return
+     */
+    private List<ModerationJob> createAndSaveJobsForPost(Post post, Integer postVersion) {
         List<ModerationJobSpec> jobSpecs = postModerationJobFactory.buildJobs(post);
         if (jobSpecs.isEmpty()) {
-            return;
+            log.warn("No moderation job specs generated for postId={}", post.getId());
+            return List.of();
         }
 
-        Set<JobKey> existingJobKeys = moderationJobRepository.findByPostIdAndPostVersion(post.getId(), postVersion).stream()
+        // Fetch existing jobs for this post and version to avoid duplicates
+        Set<JobKey> existingJobKeys = moderationJobRepository.findByPostIdAndPostVersion(post.getId(), postVersion)
+                .stream()
                 .map(job -> new JobKey(job.getSourceField(), job.getContentType()))
                 .collect(Collectors.toSet());
 
+        // Filter out job specs that already have corresponding jobs
         List<ModerationJob> newJobs = jobSpecs.stream()
                 .filter(spec -> !existingJobKeys.contains(new JobKey(spec.sourceField(), spec.contentType())))
                 .map(spec -> ModerationJob.builder()
@@ -60,20 +78,25 @@ public class ModerationOrchestratorService {
                         .contentType(spec.contentType())
                         .payload(spec.payload())
                         .status(ModerationStatus.pending)
-                        .build()
-                )
+                        .build())
                 .toList();
 
         if (newJobs.isEmpty()) {
-            return;
+            return List.of();
         }
 
-        List<ModerationJob> savedJobs = moderationJobRepository.saveAll(newJobs);
-
-        afterCommitExecutor.run(() -> savedJobs.forEach(this::publishJobRequestedEventSafely));
+        return moderationJobRepository.saveAll(newJobs);
     }
 
+    /**
+     * Marks any pending moderation jobs for the given post and superseded version
+     * as failed.
+     * 
+     * @param post                  The post whose jobs are to be updated.
+     * @param supersededPostVersion The superseded post version.
+     */
     private void markSupersededPendingJobsAsFailed(Post post, Integer supersededPostVersion) {
+        // No action needed if there's no superseded version
         if (supersededPostVersion == null) {
             return;
         }
@@ -87,8 +110,7 @@ public class ModerationOrchestratorService {
                 ModerationStatus.pending,
                 ModerationStatus.failed,
                 "Superseded by post version " + post.getVersion(),
-                LocalDateTime.now()
-        );
+                LocalDateTime.now());
     }
 
     private void publishJobRequestedEventSafely(ModerationJob job) {
@@ -112,10 +134,9 @@ public class ModerationOrchestratorService {
                 job.getPostVersion(),
                 job.getSourceField(),
                 job.getContentType(),
-                job.getPayload()
-        );
+                job.getPayload());
 
-        rabbitTemplate.convertAndSend(amqpProperties.getIngressExchange(), routingKey, event, message -> {
+        rabbitTemplate.convertAndSend(amqpProperties.getIngressTopicExchange(), routingKey, event, message -> {
             message.getMessageProperties().setCorrelationId(job.getId().toString());
             message.getMessageProperties().setMessageId(job.getId().toString());
             message.getMessageProperties().setHeader("postId", job.getPost().getId());
@@ -133,5 +154,6 @@ public class ModerationOrchestratorService {
         };
     }
 
-    private record JobKey(String sourceField, JobContentType contentType) {}
+    private record JobKey(String sourceField, JobContentType contentType) {
+    }
 }

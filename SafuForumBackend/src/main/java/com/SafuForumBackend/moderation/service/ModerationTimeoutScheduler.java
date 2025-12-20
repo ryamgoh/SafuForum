@@ -5,6 +5,8 @@ import com.SafuForumBackend.moderation.entity.ModerationJob;
 import com.SafuForumBackend.moderation.enums.ModerationStatus;
 import com.SafuForumBackend.moderation.repository.ModerationJobRepository;
 import com.SafuForumBackend.post.entity.Post;
+import com.SafuForumBackend.post.repository.PostRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,11 +22,19 @@ import java.util.List;
 public class ModerationTimeoutScheduler {
 
     private final ModerationJobRepository moderationJobRepository;
+    private final PostRepository postRepository;
     private final ModerationOrchestratorProperties properties;
 
+    /**
+     * Scheduled task that fails moderation jobs that have timed out.
+     * 
+     * Runs at a fixed delay defined by the timeoutCheckInterval property.
+     * 
+     * Transactional to ensure database operations are atomic.
+     */
     @Scheduled(fixedDelayString = "#{@moderationOrchestratorProperties.timeoutCheckInterval.toMillis()}")
     @Transactional
-    public void failTimedOutJobs() {
+    public void failAllTimedOutJobs() {
         LocalDateTime cutoff = LocalDateTime.now().minus(properties.getJobTimeout());
         List<ModerationJob> timedOutJobs = moderationJobRepository
                 .findByStatusAndCreatedAtBefore(ModerationStatus.pending, cutoff);
@@ -45,9 +55,11 @@ public class ModerationTimeoutScheduler {
                 continue;
             }
 
-            job.setErrorMessage("Timed out waiting for moderation result");
+            job.setErrorMessage("Timed out waiting for moderation completion");
             if (post.getStatus() == ModerationStatus.pending) {
                 post.setStatus(ModerationStatus.failed);
+                post.setUpdatedAt(now);
+                postRepository.save(post);
             }
         }
 
