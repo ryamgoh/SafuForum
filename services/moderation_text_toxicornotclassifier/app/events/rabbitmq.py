@@ -14,10 +14,8 @@ from app.settings import Settings
 
 LOGGER = logging.getLogger("app")
 
-JAVA_TYPE_ID = "com.SafuForumBackend.moderation.event.ModerationJobCompletedEvent"
-
-
 def setup_topology(channel: pika.adapters.blocking_connection.BlockingChannel, settings: Settings) -> None:
+    """Set up exchanges, queues, and bindings."""
     channel.exchange_declare(
         exchange=settings.ingress_exchange,
         exchange_type=settings.ingress_exchange_type,
@@ -28,16 +26,29 @@ def setup_topology(channel: pika.adapters.blocking_connection.BlockingChannel, s
         exchange_type=settings.result_exchange_type,
         durable=True,
     )
-    channel.queue_declare(queue=settings.queue_name, durable=True)
+
+    # Declare and bind the queue for outgoing moderation results
+    channel.queue_declare(queue=settings.result_queue_name, durable=True)
     channel.queue_bind(
-        queue=settings.queue_name,
+        queue=settings.result_queue_name,
+        exchange=settings.result_exchange,
+        routing_key=settings.result_routing_key,
+    )
+    
+    # Declare and bind the queue for incoming moderation jobs
+    channel.queue_declare(queue=settings.ingress_queue_name, durable=True)
+    channel.queue_bind(
+        queue=settings.ingress_queue_name,
         exchange=settings.ingress_exchange,
         routing_key=settings.ingress_routing_key,
     )
+    
+    # Set up QoS
     channel.basic_qos(prefetch_count=settings.prefetch_count)
 
 
 def _build_message_id(settings: Settings, *, correlation_id: str | None) -> str:
+    """Build a message ID based on the correlation ID (one-way encryption) or generate a new UUID."""
     if correlation_id:
         return str(uuid.uuid5(settings.message_id_namespace, f"{settings.service_name}:{correlation_id}"))
     return str(uuid.uuid4())
@@ -53,23 +64,24 @@ def _publish_result(
     message_id = _build_message_id(settings, correlation_id=correlation_id)
     props = pika.BasicProperties(
         content_type="application/json",
-        delivery_mode=2,
+        delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
         correlation_id=correlation_id,
         message_id=message_id,
         headers={
-            "__TypeId__": JAVA_TYPE_ID,
             "x-service-name": settings.service_name,
         },
     )
 
     body = json.dumps(completion.model_dump(by_alias=True), ensure_ascii=False).encode("utf-8")
-    channel.basic_publish(
+    published = channel.basic_publish(
         exchange=settings.result_exchange,
         routing_key=settings.result_routing_key,
         body=body,
         properties=props,
         mandatory=True,
     )
+    if published is False:
+        raise RuntimeError("Broker did not confirm the moderation completion publish (nack).")
 
 
 class RabbitMQEventLoop:
@@ -95,60 +107,24 @@ class RabbitMQEventLoop:
                 time.sleep(self._settings.reconnect_delay_seconds)
 
     def _run_once(self) -> None:
+        """
+        Run the event loop once.
+        """
         params = pika.URLParameters(self._settings.amqp_url)
         connection = pika.BlockingConnection(params)
         channel = connection.channel()
 
         setup_topology(channel, self._settings)
+        
+        # We want this publisher to also use publisher confirms
+        # to ensure our messages are delivered
         channel.confirm_delivery()
 
-        def on_message(
-            ch: pika.adapters.blocking_connection.BlockingChannel,
-            method: pika.spec.Basic.Deliver,
-            properties: pika.BasicProperties,
-            body: bytes,
-        ) -> None:
-            incoming_correlation_id = None
-            if properties is not None and properties.correlation_id:
-                incoming_correlation_id = str(properties.correlation_id)
-
-            try:
-                processed = self._event_service.handle_message(
-                    body=body,
-                    correlation_id=incoming_correlation_id,
-                )
-            except Exception as exc:
-                LOGGER.exception("Failed processing inbound event: %s", exc)
-                processed = ProcessedEvent(
-                    completion=ModerationJobCompletedEvent(
-                        moderation_job_id=None,
-                        post_id=None,
-                        post_version=None,
-                        status="failed",
-                        reason=str(exc),
-                    ),
-                    correlation_id=incoming_correlation_id,
-                )
-
-            try:
-                _publish_result(
-                    ch,
-                    self._settings,
-                    completion=processed.completion,
-                    correlation_id=processed.correlation_id,
-                )
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-            except Exception as exc:
-                LOGGER.exception("Failed publishing moderation completion: %s", exc)
-                try:
-                    ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-                except Exception:
-                    pass
-
-        channel.basic_consume(queue=self._settings.queue_name, on_message_callback=on_message, auto_ack=False)
+        # Start consuming messages
+        channel.basic_consume(queue=self._settings.ingress_queue_name, on_message_callback=self._on_message_callback, auto_ack=False)
         LOGGER.info(
             "Listening on queue=%s exchange=%s key=%s; publishing exchange=%s key=%s",
-            self._settings.queue_name,
+            self._settings.ingress_queue_name,
             self._settings.ingress_exchange,
             self._settings.ingress_routing_key,
             self._settings.result_exchange,
@@ -161,3 +137,55 @@ class RabbitMQEventLoop:
                 channel.close()
             finally:
                 connection.close()
+
+    def _on_message_callback(
+        self,
+        channel: pika.adapters.blocking_connection.BlockingChannel,
+        method: pika.spec.Basic.Deliver,
+        properties: pika.spec.BasicProperties,
+        body: bytes,
+    ) -> None:
+        """
+        Callback for incoming messages.
+        Process the message and publish the result.
+        """
+        incoming_correlation_id = None
+        if properties is not None and properties.correlation_id:
+            incoming_correlation_id = str(properties.correlation_id)
+
+        try:
+            processed = self._event_service.handle_message(
+                body=body,
+                correlation_id=incoming_correlation_id,
+            )
+            LOGGER.info(
+                "Processed moderation job; correlation_id=%s status=%s reason=%s",
+                processed.correlation_id,
+                processed.completion.status,
+                processed.completion.reason,
+            )
+        except Exception as exc:
+            LOGGER.exception("Failed processing inbound event: %s", exc)
+            processed = ProcessedEvent(
+                completion=ModerationJobCompletedEvent(
+                    moderation_job_id=None,
+                    post_id=None,
+                    post_version=None,
+                    status="failed",
+                    reason=str(exc),
+                ),
+                correlation_id=incoming_correlation_id,
+            )
+
+        try:
+            _publish_result(
+                channel,
+                self._settings,
+                completion=processed.completion,
+                correlation_id=processed.correlation_id,
+            )
+            channel.basic_ack(delivery_tag=method.delivery_tag)
+        except Exception as exc:
+            LOGGER.exception("Failed publishing moderation completion: %s", exc)
+            # Avoid tight redelivery loops when publishing fails; let the outer loop reconnect with backoff.
+            raise

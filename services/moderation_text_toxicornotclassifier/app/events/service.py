@@ -47,9 +47,6 @@ class ModerationEventService:
             raw_event = _decode_json(body)
         except Exception as exc:
             completion = ModerationJobCompletedEvent(
-                moderation_job_id=None,
-                post_id=None,
-                post_version=None,
                 status="failed",
                 reason=str(exc),
             )
@@ -59,9 +56,6 @@ class ModerationEventService:
             job = ModerationJob.model_validate(raw_event)
         except ValidationError as exc:
             completion = ModerationJobCompletedEvent(
-                moderation_job_id=None,
-                post_id=None,
-                post_version=None,
                 status="failed",
                 reason=str(exc),
             )
@@ -75,6 +69,7 @@ class ModerationEventService:
         else:
             try:
                 decision = self._inference_service.classify_text(job.payload)
+                print("Decision:", decision)
             except Exception as exc:
                 decision = ModerationDecision(status="failed", reason=str(exc))
 
