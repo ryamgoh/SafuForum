@@ -31,6 +31,9 @@ def main() -> int:
     inference_service = ToxicOrNotInferenceService.from_artifacts(
         settings.model_artifacts_path,
         threshold=settings.toxic_threshold,
+        w2v_model_path=settings.w2v_model_path,
+        w2v_format=settings.w2v_format,
+        w2v_stem=settings.w2v_stem,
     )
 
     event_service = ModerationEventService(inference_service)
