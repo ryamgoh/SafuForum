@@ -84,7 +84,7 @@ services:
       RABBITMQ_VHOST: /
       INGRESS_EXCHANGE: x.moderation.ingress
       INGRESS_ROUTING_KEY: moderation.job.text
-      QUEUE_NAME: q.moderation.job.text.toxicornotclassifier
+      INGRESS_QUEUE_NAME: q.moderation.job.text.toxicornotclassifier
       RESULT_EXCHANGE: x.moderation.result
       RESULT_ROUTING_KEY: moderation.job.result
       MODEL_ARTIFACTS_PATH: /model/toxic_logreg.joblib
