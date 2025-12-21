@@ -4,12 +4,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from moderation_text_toxicornotclassifier.domain import ModerationDecision
-from moderation_text_toxicornotclassifier.inference.toxicornot_model import ToxicityModel, load_model
+from app.domain import ModerationDecision
+from app.inference.toxicornot_model import ToxicityModel, load_model
 
 
 class TextInferenceService(Protocol):
-    def classify_text(self, text: str) -> ModerationDecision: ...
+    def classify_text(self, text: str) -> ModerationDecision: 
+        ...
 
 
 @dataclass(frozen=True)

@@ -3,10 +3,10 @@
 Consumes moderation text jobs from RabbitMQ and publishes moderation results.
 
 ## Architecture
-- `moderation_text_toxicornotclassifier/events/rabbitmq.py`: persistent RabbitMQ event loop (consume + publish)
-- `moderation_text_toxicornotclassifier/events/service.py`: event handler (JSON -> domain -> result event)
-- `moderation_text_toxicornotclassifier/inference/service.py`: inference service (text -> decision)
-- `moderation_text_toxicornotclassifier/inference/toxicornot_model.py`: model loading + vectorization
+- `app/events/rabbitmq.py`: persistent RabbitMQ event loop (consume + publish)
+- `app/events/service.py`: event handler (JSON -> domain -> result event)
+- `app/inference/service.py`: inference service (text -> decision)
+- `app/inference/toxicornot_model.py`: model loading + vectorization
 
 ## AMQP topology
 - Ingress exchange (topic): `x.moderation.ingress`
@@ -29,4 +29,4 @@ Result messages preserve the incoming `correlationId`; `messageId` is a UUID (UU
 This worker expects the `toxic_logreg.joblib` + Word2Vec `.model` artifacts to be present at runtime (commonly mounted from `ai/toxicornot_textclassifier/results/`, which is gitignored).
 
 ## Run
-- `uv run python -m moderation_text_toxicornotclassifier`
+- `uv run python -m app`

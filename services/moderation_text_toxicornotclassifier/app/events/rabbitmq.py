@@ -7,12 +7,12 @@ import uuid
 
 import pika
 
-from moderation_text_toxicornotclassifier.domain import ModerationJobCompletedEvent
-from moderation_text_toxicornotclassifier.events.service import ModerationEventService, ProcessedEvent
-from moderation_text_toxicornotclassifier.settings import Settings
+from app.domain import ModerationJobCompletedEvent
+from app.events.service import ModerationEventService, ProcessedEvent
+from app.settings import Settings
 
 
-LOGGER = logging.getLogger("moderation_text_toxicornotclassifier")
+LOGGER = logging.getLogger("app")
 
 JAVA_TYPE_ID = "com.SafuForumBackend.moderation.event.ModerationJobCompletedEvent"
 
@@ -62,7 +62,7 @@ def _publish_result(
         },
     )
 
-    body = json.dumps(completion.to_dict(), ensure_ascii=False).encode("utf-8")
+    body = json.dumps(completion.model_dump(by_alias=True), ensure_ascii=False).encode("utf-8")
     channel.basic_publish(
         exchange=settings.result_exchange,
         routing_key=settings.result_routing_key,
@@ -73,11 +73,17 @@ def _publish_result(
 
 
 class RabbitMQEventLoop:
+    """
+    RabbitMQ-based event loop for moderation events.
+    """
     def __init__(self, settings: Settings, event_service: ModerationEventService) -> None:
         self._settings = settings
         self._event_service = event_service
 
     def run_forever(self) -> int:
+        """
+        Run the event loop, reconnecting on failure.
+        """
         while True:
             try:
                 self._run_once()

@@ -6,4 +6,4 @@ COPY . /app
 
 RUN uv sync
 
-CMD ["uv", "run", "python", "-m", "moderation_text_toxicornotclassifier"]
+CMD ["uv", "run", "python", "-m", "app"]
