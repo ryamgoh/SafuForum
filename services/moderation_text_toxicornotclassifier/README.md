@@ -21,7 +21,7 @@ Consumes moderation text jobs from RabbitMQ and publishes moderation results.
 - `RABBITMQ_PORT` (default: `5672`)
 - `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` (default: `guest`/`guest`)
 - `RABBITMQ_VHOST` (default: `/`)
-- `AMQP_URL` (optional; overrides the host/port/user/pass fields)
+- `AMQP_URL` (optional; overrides the host/port/user/pass fields). For the default vhost (`/`), use `/%2F` (example: `amqp://guest:guest@rabbitmq:5672/%2F`), not a bare trailing slash.
 - `MODEL_ARTIFACTS_PATH` (default: `/model/toxic_logreg.joblib`)
 - `W2V_MODEL_PATH` (optional; e.g. `word2vec_200.kv`)
 - `W2V_FORMAT` (default: `vectors`; `vectors|full`)

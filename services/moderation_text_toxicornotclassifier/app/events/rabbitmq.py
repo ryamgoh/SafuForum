@@ -111,6 +111,11 @@ class RabbitMQEventLoop:
         Run the event loop once.
         """
         params = pika.URLParameters(self._settings.amqp_url)
+        # Pika expects the default vhost (`/`) to be encoded as `%2F` in the URL.
+        # If the URL ends with a bare slash (e.g. `amqp://host/`), `virtual_host` becomes empty.
+        # Default to `/` to avoid hard-to-debug 530 NOT_ALLOWED errors.
+        if not params.virtual_host or params.virtual_host.strip() == "":
+            params.virtual_host = "/"
         connection = pika.BlockingConnection(params)
         channel = connection.channel()
 
