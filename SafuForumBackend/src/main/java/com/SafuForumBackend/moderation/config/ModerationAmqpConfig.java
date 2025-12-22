@@ -17,8 +17,8 @@ public class ModerationAmqpConfig {
     }
 
     @Bean
-    public DirectExchange moderationResultExchange() {
-        return new DirectExchange(properties.getResultExchange(), true, false);
+    public TopicExchange moderationEgressExchange() {
+        return new TopicExchange(properties.getEgressExchange(), true, false);
     }
 
     @Bean
@@ -28,17 +28,9 @@ public class ModerationAmqpConfig {
 
     @Bean
     public Binding moderationJobCompletedBinding(Queue moderationJobCompletedQueue,
-            TopicExchange moderationIngressExchange) {
+            TopicExchange moderationEgressExchange) {
         return BindingBuilder.bind(moderationJobCompletedQueue)
-                .to(moderationIngressExchange)
+                .to(moderationEgressExchange)
                 .with(properties.getRouting().getJobCompleted());
-    }
-
-    @Bean
-    public Binding moderationJobResultBinding(Queue moderationJobCompletedQueue,
-            DirectExchange moderationResultExchange) {
-        return BindingBuilder.bind(moderationJobCompletedQueue)
-                .to(moderationResultExchange)
-                .with(properties.getRouting().getJobResult());
     }
 }

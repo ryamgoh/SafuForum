@@ -8,7 +8,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from gensim.models import Word2Vec
+from gensim.models import KeyedVectors, Word2Vec
 from gensim.parsing.porter import PorterStemmer
 from gensim.parsing.preprocessing import remove_stopwords
 from gensim.utils import simple_preprocess
@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
         description="Binary toxic/not-toxic classifier for the Kaggle Jigsaw dataset using averaged Word2Vec vectors."
     )
     parser.add_argument(
-        "--train-csv", default="data/train.csv", help="Path to Kaggle train.csv"
+        "--train-csv", default="result/train.csv", help="Path to Kaggle train.csv"
     )
     parser.add_argument(
         "--test-size", type=float, default=0.30, help="Holdout fraction"
@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--vector-size", type=int, default=500, help="Word2Vec vector size"
+        "--vector-size", type=int, default=200, help="Word2Vec vector size"
     )
     parser.add_argument("--window", type=int, default=3, help="Word2Vec context window")
     parser.add_argument("--min-count", type=int, default=1, help="Word2Vec min_count")
@@ -62,12 +62,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--w2v-model",
         default=None,
-        help="Path to a saved Word2Vec model; default is data/word2vec_<vector-size>.model",
+        help="Path to saved embeddings; default is result/word2vec_<vector-size>.model (or .kv if --w2v-format=vectors).",
     )
     parser.add_argument(
         "--retrain-w2v",
         action="store_true",
         help="Force training a fresh Word2Vec model",
+    )
+    parser.add_argument(
+        "--w2v-format",
+        choices=("full", "vectors"),
+        default="full",
+        help="How to persist embeddings: full=Word2Vec model (includes training state, larger) or vectors=KeyedVectors only (smaller, inference-only).",
     )
     parser.add_argument("--no-stem", action="store_true", help="Disable stemming")
 
@@ -121,9 +127,10 @@ def load_or_train_w2v(
     sg: int,
     seed: int,
     retrain: bool,
-) -> Word2Vec:
+    persist_format: str,
+) -> KeyedVectors:
     if model_path.exists() and not retrain:
-        return Word2Vec.load(str(model_path))
+        return _load_embeddings(model_path)
 
     model_path.parent.mkdir(parents=True, exist_ok=True)
     model = Word2Vec(
@@ -135,25 +142,38 @@ def load_or_train_w2v(
         sg=sg,
         seed=seed,
     )
+    if persist_format == "vectors":
+        model.wv.save(str(model_path))
+        return model.wv
+
     model.save(str(model_path))
-    return model
+    return model.wv
 
 
-def document_vector(tokens: list[str], model: Word2Vec) -> np.ndarray:
-    vectors = [model.wv[tok] for tok in tokens if tok in model.wv]
+def _load_embeddings(path: Path) -> KeyedVectors:
+    obj = Word2Vec.load(str(path))
+    if isinstance(obj, Word2Vec):
+        return obj.wv
+    if isinstance(obj, KeyedVectors):
+        return obj
+    raise TypeError(f"Unsupported embeddings object in {path}: {type(obj)!r}")
+
+
+def document_vector(tokens: list[str], model: KeyedVectors) -> np.ndarray:
+    vectors = [model[tok] for tok in tokens if tok in model]
     if not vectors:
         return np.zeros(model.vector_size, dtype=np.float32)
     return np.mean(np.asarray(vectors, dtype=np.float32), axis=0)
 
 
-def build_matrix(token_lists: list[list[str]], model: Word2Vec) -> np.ndarray:
+def build_matrix(token_lists: list[list[str]], model: KeyedVectors) -> np.ndarray:
     return np.vstack([document_vector(tokens, model) for tokens in token_lists]).astype(
         np.float32, copy=False
     )
 
 
 def save_artifacts(
-    path: Path, *, classifier: LogisticRegression, w2v_model_path: Path, stem: bool
+    path: Path, *, classifier: LogisticRegression, w2v_model_path: Path, stem: bool, w2v_format: str
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(
@@ -161,6 +181,7 @@ def save_artifacts(
             "classifier": classifier,
             "w2v_model_path": str(w2v_model_path),
             "stem": stem,
+            "w2v_format": str(w2v_format),
         },
         str(path),
     )
@@ -169,8 +190,8 @@ def save_artifacts(
 def main() -> int:
     args = parse_args()
 
-    w2v_model_path = Path(
-        args.w2v_model if args.w2v_model else f"data/word2vec_{args.vector_size}.model"
+    w2v_model_path = Path(args.w2v_model) if args.w2v_model else Path(
+        f"result/word2vec_{args.vector_size}.kv" if args.w2v_format == "vectors" else f"result/word2vec_{args.vector_size}.model"
     )
 
     df = pd.read_csv(args.train_csv, usecols=["comment_text", *TOXICITY_COLUMNS])
@@ -201,6 +222,7 @@ def main() -> int:
         sg=args.sg,
         seed=args.random_state,
         retrain=args.retrain_w2v,
+        persist_format=args.w2v_format,
     )
 
     X_train_vec = build_matrix(X_train_tokens, w2v)
@@ -230,6 +252,7 @@ def main() -> int:
             classifier=clf,
             w2v_model_path=w2v_model_path,
             stem=not args.no_stem,
+            w2v_format=args.w2v_format,
         )
         print(f"Saved classifier artifacts to: {args.artifacts_out}")
         print()
