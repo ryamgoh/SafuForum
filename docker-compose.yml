@@ -69,6 +69,55 @@ services:
     networks:
       - safuforum-net
 
+  # The Source of Truth (Registry & Aggregator State)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - safuforum-net
+
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    ports:
+      - "2375:2375"
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+    healthcheck:
+      # Netcat (nc) checks if the port is listening
+      test: ["CMD-SHELL", "nc -z localhost 2375 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - safuforum-net
+
+  aggregator:
+    build:
+      context: ./services/moderation_aggregator
+      dockerfile: Dockerfile
+    environment:
+      - AMQP_URL=amqp://guest:guest@rabbitmq:5672/%2F
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - REDIS_HOST=redis
+    depends_on:
+      docker-socket-proxy:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - safuforum-net
+
   # Moderation text worker (toxicornotclassifier)
   moderation-text-toxicornotclassifier:
     build:
@@ -77,6 +126,8 @@ services:
     container_name: safuforum-moderation-text-toxicornotclassifier
     restart: unless-stopped
     environment:
+      SERVICE_NAME: moderator-text-toxicornotclassifier
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672/%2F
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USERNAME: guest
@@ -89,6 +140,8 @@ services:
       RESULT_ROUTING_KEY: moderation.job.result
       MODEL_ARTIFACTS_PATH: /model/toxic_logreg.joblib
       TOXIC_THRESHOLD: 0.5
+    labels:
+      - "domain=moderation"
     volumes:
       - ./ai/toxicornot_textclassifier/results:/model:ro
     depends_on:
