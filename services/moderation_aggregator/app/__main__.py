@@ -19,17 +19,19 @@ def main() -> int:
     """Main entry point for the Moderation Aggregator Service."""
     _install_signal_handlers()
    
-    # 1. Load Configuration    # 2. Setup Logging
+    # 1. Load Configuration    
     logging.basicConfig(
         level=settings.log_level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
+    # 2. Setup Logging
     logger = logging.getLogger(__name__)
     
-    registry = DockerRegistry(settings.docker_host)
+    # 3. Initialize Docker Registry Monitor
+    registry = DockerRegistry(settings.docker_host, settings.moderation_label)
 
     try:
-        # 2. Initialize Services
+        # 4. Initialize Services
         event_service = EventService(settings, registry)
         worker = RabbitMQEventLoop(settings, event_service)
 
