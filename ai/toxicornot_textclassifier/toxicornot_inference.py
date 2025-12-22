@@ -11,7 +11,7 @@ from typing import Sequence
 
 import joblib
 import numpy as np
-from gensim.models import Word2Vec
+from gensim.models import KeyedVectors, Word2Vec
 from gensim.parsing.porter import PorterStemmer
 from gensim.parsing.preprocessing import remove_stopwords
 from gensim.utils import simple_preprocess
@@ -20,7 +20,7 @@ from gensim.utils import simple_preprocess
 @dataclass(frozen=True)
 class ToxicityModel:
     classifier: object
-    w2v: Word2Vec
+    w2v: KeyedVectors
     stem: bool
 
     def predict_proba(self, texts: Sequence[str]) -> np.ndarray:
@@ -49,9 +49,9 @@ def _resolve_w2v_path(artifacts_path: Path, stored_path: str) -> Path:
 
     tried = ", ".join(str(p) for p in candidates)
     raise FileNotFoundError(
-        "Could not find Word2Vec model referenced by artifacts. "
+        "Could not find embeddings referenced by artifacts. "
         f"Stored path={stored_path!r}; tried: {tried}. "
-        "Make sure you deploy the .model file AND its companion .npy files."
+        "Make sure you deploy the embeddings file AND its companion .npy file(s)."
     )
 
 
@@ -67,9 +67,18 @@ def load_model(artifacts_path: str | Path) -> ToxicityModel:
             raise KeyError(f"Missing key {key!r} in {artifacts_path}")
 
     w2v_path = _resolve_w2v_path(artifacts_path, str(bundle["w2v_model_path"]))
-    w2v = Word2Vec.load(str(w2v_path))
+    w2v = _load_embeddings(w2v_path)
 
     return ToxicityModel(classifier=bundle["classifier"], w2v=w2v, stem=bool(bundle["stem"]))
+
+
+def _load_embeddings(path: Path) -> KeyedVectors:
+    obj = Word2Vec.load(str(path))
+    if isinstance(obj, Word2Vec):
+        return obj.wv
+    if isinstance(obj, KeyedVectors):
+        return obj
+    raise TypeError(f"Unsupported embeddings object in {path}: {type(obj)!r}")
 
 
 def preprocess_text(text: str, *, stemmer: PorterStemmer | None) -> list[str]:
@@ -80,14 +89,14 @@ def preprocess_text(text: str, *, stemmer: PorterStemmer | None) -> list[str]:
     return [stemmer.stem(tok) for tok in tokens]
 
 
-def document_vector(tokens: list[str], model: Word2Vec) -> np.ndarray:
-    vectors = [model.wv[tok] for tok in tokens if tok in model.wv]
+def document_vector(tokens: list[str], model: KeyedVectors) -> np.ndarray:
+    vectors = [model[tok] for tok in tokens if tok in model]
     if not vectors:
         return np.zeros(model.vector_size, dtype=np.float32)
     return np.mean(np.asarray(vectors, dtype=np.float32), axis=0)
 
 
-def build_matrix(texts: Sequence[str], model: Word2Vec, *, stem: bool) -> np.ndarray:
+def build_matrix(texts: Sequence[str], model: KeyedVectors, *, stem: bool) -> np.ndarray:
     stemmer = PorterStemmer() if stem else None
     rows = [document_vector(preprocess_text(text, stemmer=stemmer), model) for text in texts]
     if not rows:

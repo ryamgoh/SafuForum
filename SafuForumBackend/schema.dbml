@@ -1,0 +1,253 @@
+Project safuforum {
+  database_type: 'PostgreSQL'
+  Note: 'Derived from Flyway migrations in SafuForumBackend/src/main/resources/db/migration (V1-V14)'
+}
+
+Enum moderation_status {
+  pending
+  approved
+  rejected
+  failed
+}
+
+Enum job_content_type {
+  text
+  image
+}
+
+Table users {
+  id bigint [pk, increment]
+  username varchar(50) [not null, unique]
+  email varchar(100) [not null, unique]
+  oauth_provider varchar(20)
+  oauth_provider_id varchar(255)
+  display_name varchar(100)
+  avatar_url varchar(500)
+  bio text
+  role varchar(20) [not null, default: 'USER']
+  is_banned boolean [not null, default: false]
+  banned_until timestamp
+  ban_reason text
+  reputation integer [not null, default: 0]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  last_login_at timestamp
+
+  Indexes {
+    (oauth_provider, oauth_provider_id) [unique, name: 'idx_users_oauth', note: 'Partial: WHERE oauth_provider IS NOT NULL']
+    (role) [name: 'idx_users_role']
+    (reputation) [name: 'idx_users_reputation']
+    (email) [name: 'idx_users_email']
+  }
+}
+
+Table refresh_tokens {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  token varchar(512) [not null, unique]
+  expires_at timestamp [not null]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  revoked boolean [not null, default: false]
+  device_info varchar(255)
+
+  Indexes {
+    (user_id) [name: 'idx_refresh_tokens_user']
+    (token) [name: 'idx_refresh_tokens_token']
+    (expires_at) [name: 'idx_refresh_tokens_expires']
+  }
+}
+
+Table posts {
+  id bigint [pk, increment]
+  author_id bigint [not null]
+  title varchar(300) [not null]
+  content text [not null]
+  status moderation_status [not null, default: 'pending']
+  version integer [not null, default: 1]
+  is_deleted boolean [not null, default: false]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    (author_id) [name: 'idx_posts_author']
+    (created_at) [name: 'idx_posts_created', note: 'created_at DESC']
+    (is_deleted, created_at) [name: 'idx_posts_deleted_created', note: 'created_at DESC']
+    (status) [name: 'idx_posts_moderation_status']
+  }
+}
+
+Table comments {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  author_id bigint [not null]
+  parent_comment_id bigint
+  content text [not null]
+  is_deleted boolean [not null, default: false]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    (post_id) [name: 'idx_comments_post']
+    (author_id) [name: 'idx_comments_author']
+    (parent_comment_id) [name: 'idx_comments_parent']
+    (created_at) [name: 'idx_comments_created']
+  }
+}
+
+Table images {
+  id bigint [pk, increment]
+  uploader_id bigint [not null]
+  post_id bigint
+  comment_id bigint
+  display_order integer [not null]
+  seaweedfs_fid varchar(255) [not null]
+  seaweedfs_url varchar(500) [not null]
+  original_filename varchar(255) [not null]
+  file_size_bytes bigint [not null]
+  mime_type varchar(50) [not null]
+  upload_status varchar(20) [not null, default: 'COMPLETED']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  deleted_at timestamp
+
+  Note: 'CHECK: (post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL) OR (post_id IS NULL AND comment_id IS NULL)'
+
+  Indexes {
+    (uploader_id) [name: 'idx_images_uploader']
+    (post_id) [name: 'idx_images_post', note: 'Partial: WHERE post_id IS NOT NULL']
+    (comment_id) [name: 'idx_images_comment', note: 'Partial: WHERE comment_id IS NOT NULL']
+    (created_at) [name: 'idx_images_created', note: 'Partial: WHERE deleted_at IS NULL']
+  }
+}
+
+Table votes {
+  id bigint [pk, increment]
+  user_id bigint [not null]
+  post_id bigint
+  comment_id bigint
+  vote_type smallint [not null, note: 'CHECK: vote_type IN (-1, 1)']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  version bigint [not null, default: 0]
+
+  Note: 'CHECK: exactly one of (post_id, comment_id) is set (post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL)'
+
+  Indexes {
+    (user_id, post_id) [unique, name: 'idx_votes_user_post', note: 'Partial: WHERE post_id IS NOT NULL']
+    (user_id, comment_id) [unique, name: 'idx_votes_user_comment', note: 'Partial: WHERE comment_id IS NOT NULL']
+    (post_id) [name: 'idx_votes_post']
+    (comment_id) [name: 'idx_votes_comment']
+    (user_id) [name: 'idx_votes_user']
+  }
+}
+
+Table tags {
+  id bigint [pk, increment]
+  name varchar(50) [not null, unique]
+  slug varchar(50) [not null, unique]
+  color varchar(7) [default: '#3B82F6']
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+}
+
+Table post_tags {
+  post_id bigint [not null]
+  tag_id bigint [not null]
+
+  Indexes {
+    (post_id, tag_id) [pk]
+    (post_id) [name: 'idx_post_tags_post']
+    (tag_id) [name: 'idx_post_tags_tag']
+  }
+}
+
+Table moderation_actions {
+  id bigint [pk, increment]
+  moderator_id bigint [not null]
+  target_user_id bigint
+  target_post_id bigint
+  target_comment_id bigint
+  action_type varchar(50) [not null]
+  reason text
+  duration_minutes integer
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    (moderator_id) [name: 'idx_moderation_moderator']
+    (target_user_id) [name: 'idx_moderation_target_user']
+    (target_post_id) [name: 'idx_moderation_target_post']
+    (target_comment_id) [name: 'idx_moderation_target_comment']
+    (created_at) [name: 'idx_moderation_created', note: 'created_at DESC']
+  }
+}
+
+Table content_flags {
+  id bigint [pk, increment]
+  reporter_id bigint [not null]
+  post_id bigint
+  comment_id bigint
+  flag_type varchar(50) [not null]
+  description text
+  status varchar(20) [not null, default: 'PENDING']
+  resolved_by bigint
+  resolved_at timestamp
+  resolution_note text
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Note: 'CHECK: exactly one of (post_id, comment_id) is set (post_id IS NOT NULL AND comment_id IS NULL) OR (post_id IS NULL AND comment_id IS NOT NULL)'
+
+  Indexes {
+    (reporter_id, post_id) [unique, name: 'idx_content_flags_user_post', note: 'Partial: WHERE post_id IS NOT NULL']
+    (reporter_id, comment_id) [unique, name: 'idx_content_flags_user_comment', note: 'Partial: WHERE comment_id IS NOT NULL']
+    (status) [name: 'idx_content_flags_status']
+    (post_id) [name: 'idx_content_flags_post']
+    (comment_id) [name: 'idx_content_flags_comment']
+    (reporter_id) [name: 'idx_content_flags_reporter']
+  }
+}
+
+Table moderation_jobs {
+  id bigint [pk, increment]
+  post_id bigint [not null]
+  post_version integer [not null]
+  source_field varchar(100) [not null]
+  content_type job_content_type [not null]
+  payload text [not null]
+  status moderation_status [not null, default: 'pending']
+  error_message text
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+
+  Indexes {
+    (post_id, post_version) [name: 'idx_mod_jobs_post_v']
+    (status) [name: 'idx_mod_jobs_status']
+  }
+}
+
+Ref: refresh_tokens.user_id > users.id [delete: cascade]
+
+Ref: posts.author_id > users.id [delete: cascade]
+
+Ref: comments.post_id > posts.id [delete: cascade]
+Ref: comments.author_id > users.id [delete: cascade]
+Ref: comments.parent_comment_id > comments.id [delete: cascade]
+
+Ref: images.uploader_id > users.id [delete: cascade]
+Ref: images.post_id > posts.id [delete: cascade]
+Ref: images.comment_id > comments.id [delete: cascade]
+
+Ref: votes.user_id > users.id [delete: cascade]
+Ref: votes.post_id > posts.id [delete: cascade]
+Ref: votes.comment_id > comments.id [delete: cascade]
+
+Ref: post_tags.post_id > posts.id [delete: cascade]
+Ref: post_tags.tag_id > tags.id [delete: cascade]
+
+Ref: moderation_jobs.post_id > posts.id [delete: cascade]
+
+Ref: moderation_actions.moderator_id > users.id [delete: cascade]
+Ref: moderation_actions.target_user_id > users.id [delete: set null]
+Ref: moderation_actions.target_post_id > posts.id [delete: set null]
+Ref: moderation_actions.target_comment_id > comments.id [delete: set null]
+
+Ref: content_flags.reporter_id > users.id [delete: cascade]
+Ref: content_flags.post_id > posts.id [delete: cascade]
+Ref: content_flags.comment_id > comments.id [delete: cascade]
+Ref: content_flags.resolved_by > users.id [delete: set null]

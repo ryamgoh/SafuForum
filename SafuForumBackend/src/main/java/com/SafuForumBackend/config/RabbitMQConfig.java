@@ -5,11 +5,10 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.support.converter.MessageConverter;
-import org.springframework.amqp.support.converter.SimpleMessageConverter;
+import org.springframework.amqp.support.converter.DefaultJacksonJavaTypeMapper;
+import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import java.util.List;
 
 @Configuration
 public class RabbitMQConfig {
@@ -39,14 +38,10 @@ public class RabbitMQConfig {
 
     @Bean
     public MessageConverter messageConverter() {
-        SimpleMessageConverter converter = new SimpleMessageConverter();
-        converter.setAllowedListPatterns(
-                List.of(
-                        "com.SafuForumBackend.*",
-                        "java.util.*",
-                        "java.lang.*"
-                )
-        );
+        JacksonJsonMessageConverter converter = new JacksonJsonMessageConverter();
+        DefaultJacksonJavaTypeMapper typeMapper = new DefaultJacksonJavaTypeMapper();
+        typeMapper.setTrustedPackages("com.SafuForumBackend.*", "java.util.*", "java.lang.*");
+        converter.setJavaTypeMapper(typeMapper);
         return converter;
     }
 }

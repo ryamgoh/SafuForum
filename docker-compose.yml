@@ -69,6 +69,34 @@ services:
     networks:
       - safuforum-net
 
+  # Moderation text worker (toxicornotclassifier)
+  moderation-text-toxicornotclassifier:
+    build:
+      context: ./services/moderation_text_toxicornotclassifier
+      dockerfile: Dockerfile
+    container_name: safuforum-moderation-text-toxicornotclassifier
+    restart: unless-stopped
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_VHOST: /
+      INGRESS_EXCHANGE: x.moderation.ingress
+      INGRESS_ROUTING_KEY: moderation.job.text
+      INGRESS_QUEUE_NAME: q.moderation.job.text.toxicornotclassifier
+      RESULT_EXCHANGE: x.moderation.result
+      RESULT_ROUTING_KEY: moderation.job.result
+      MODEL_ARTIFACTS_PATH: /model/toxic_logreg.joblib
+      TOXIC_THRESHOLD: 0.5
+    volumes:
+      - ./ai/toxicornot_textclassifier/results:/model:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - safuforum-net
+
   # Frontend (Next.js)
   frontend:
     build:

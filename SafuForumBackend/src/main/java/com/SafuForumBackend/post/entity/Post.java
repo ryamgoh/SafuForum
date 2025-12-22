@@ -1,11 +1,18 @@
 package com.SafuForumBackend.post.entity;
 
+import com.SafuForumBackend.image.entity.Image;
+import com.SafuForumBackend.moderation.enums.ModerationStatus;
 import com.SafuForumBackend.user.entity.User;
 import com.SafuForumBackend.tag.entity.Tag;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -31,6 +38,16 @@ public class Post {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+    @Column(nullable = false, columnDefinition = "moderation_status")
+    @Builder.Default
+    private ModerationStatus status = ModerationStatus.pending;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Integer version = 1;
+
     @Builder.Default
     @Column(name = "is_deleted", nullable = false)
     private Boolean isDeleted = false;
@@ -44,13 +61,14 @@ public class Post {
     private LocalDateTime updatedAt = LocalDateTime.now();
 
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "post_tags",
-            joinColumns = @JoinColumn(name = "post_id"),
-            inverseJoinColumns = @JoinColumn(name = "tag_id")
-    )
+    @JoinTable(name = "post_tags", joinColumns = @JoinColumn(name = "post_id"), inverseJoinColumns = @JoinColumn(name = "tag_id"))
     @Builder.Default
     private Set<Tag> tags = new HashSet<>();
+
+    @OneToMany(mappedBy = "post", fetch = FetchType.LAZY)
+    @OrderBy("displayOrder ASC")
+    @Builder.Default
+    private List<Image> images = new ArrayList<>();
 
     public void addTag(Tag tag) {
         this.tags.add(tag);
