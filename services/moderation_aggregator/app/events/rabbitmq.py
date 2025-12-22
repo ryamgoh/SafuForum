@@ -97,7 +97,7 @@ class RabbitMQEventLoop:
             properties=properties
         )
 
-    def run_forever(self):
+    def run_forever(self) -> int:
         """Main event loop to connect, consume, and process messages."""
         while True:
             try:
@@ -131,3 +131,5 @@ class RabbitMQEventLoop:
                                self._settings.reconnect_delay_seconds, err)
                 time.sleep(self._settings.reconnect_delay_seconds)
                 continue
+            
+        return 0
