@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     # Use Case-Insensitive environment variable lookup
     model_config = SettingsConfigDict(
         extra="ignore",
-        frozen=True
+        frozen=True,
+        case_sensitive=False
     )
 
     # Use AmqpDsn for automatic URL validation (user, pass, host, port)
@@ -33,7 +34,7 @@ class Settings(BaseSettings):
     redis_host: str = Field(default="redis", alias="REDIS_HOST")
 
     # Ensure Docker labels are consistent
-    moderation_label: str = "domain=moderation"
+    moderation_label: str = Field(default="domain=moderation", alias="MODERATION_LABEL")
 
 # Usage
 settings = Settings()
