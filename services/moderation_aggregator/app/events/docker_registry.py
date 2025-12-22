@@ -6,9 +6,16 @@ LOGGER = logging.getLogger(__name__)
 
 
 class DockerRegistry:
-    def __init__(self, docker_url="tcp://docker-socket-proxy:2375"):
-        self.client = docker.DockerClient(base_url=docker_url)
-        self.label_filter = {"label": "domain=moderation"}
+    def __init__(self, 
+                 docker_url: str = "tcp://docker-socket-proxy:2375", 
+                 label="domain=moderation", 
+                 tls_config=None):
+        # NOTE: This client connects to an internal docker-socket-proxy, which is expected
+        # to be reachable only on a protected network and to enforce its own access controls.
+        # For deployments that require end-to-end TLS/authentication from this service to
+        # the proxy, pass a docker.tls.TLSConfig instance via tls_config.
+        self.client = docker.DockerClient(base_url=docker_url, tls=tls_config)
+        self.label_filter = {"label": label}
         self._active_count = 0
         self._lock = threading.Lock()
 
@@ -28,7 +35,13 @@ class DockerRegistry:
             LOGGER.info("Docker Registry synced. Active moderators: %s", self._active_count)
 
     def _listen_for_events(self):
-        """Listen to Docker events (start, die, pause, unpause)."""
+        """
+        Listen to Docker events (start, die, pause, unpause).
+        
+        TODO:
+        The Docker registry synchronization relies on event streaming without any error recovery mechanism. If the event stream breaks (line 33), the method silently exits when _stop_event is set, but network errors or API failures could cause the event stream to terminate unexpectedly without updating _stop_event. Consider adding error handling and reconnection logic to maintain accurate container counts.
+
+        """
         # filters={'event': ['start', 'die', 'pause', 'unpause']}
         for event in self.client.events(decode=True, filters=self.label_filter):
             if self._stop_event.is_set():
