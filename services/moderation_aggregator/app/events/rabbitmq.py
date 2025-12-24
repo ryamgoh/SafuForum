@@ -1,5 +1,6 @@
 import logging
 import time
+import uuid
 import pika
 from typing import Any, Optional
 from app.domain import JobCompletedEvent
@@ -15,6 +16,8 @@ class RabbitMQEventLoop:
         self._service = event_service
         self._connection: Optional[pika.BlockingConnection] = None
         self._channel: Optional[pika.adapters.blocking_connection.BlockingChannel] = None
+        self._publish_returned: bool = False
+        self._publish_return_reason: str | None = None
 
     def _setup_topology(self):
         """Standardizes exchanges and bindings."""
@@ -32,6 +35,13 @@ class RabbitMQEventLoop:
 
         self._channel.basic_qos(prefetch_count=self._settings.prefetch_count)
         self._channel.confirm_delivery()
+        self._channel.add_on_return_callback(self._on_return)
+
+    def _on_return(self, _ch, method, properties, _body):
+        self._publish_returned = True
+        cid = getattr(properties, "correlation_id", None)
+        self._publish_return_reason = f"{getattr(method, 'reply_code', '?')}:{getattr(method, 'reply_text', '?')}; correlation_id={cid}"
+        LOGGER.error("Egress publish was returned (unroutable): %s", self._publish_return_reason)
 
     @staticmethod
     def _coerce_header_value(value: object) -> str | None:
@@ -57,7 +67,7 @@ class RabbitMQEventLoop:
     def _on_message(self, ch, method, props, body):
         cid = None
         if props is not None and props.correlation_id:
-            cid = str(props.correlation_id)
+            cid = self._coerce_header_value(props.correlation_id)
 
         headers: dict[Any, Any] = {}
         if props is not None and props.headers:
@@ -70,32 +80,50 @@ class RabbitMQEventLoop:
 
             # Only publish if the aggregator has determined the job is fully complete
             if final_event:
-                publish_cid = cid
-                if not publish_cid and final_event.moderation_job_id is not None:
-                    publish_cid = str(final_event.moderation_job_id)
-                self._publish_final(final_event, publish_cid)
-                LOGGER.info("Published final aggregated result for CID: %s", publish_cid)
+                if not cid:
+                    raise RuntimeError("final_event returned without correlation_id")
+                self._publish_final(final_event, cid)
+                try:
+                    self._service.cleanup(cid)
+                except Exception:
+                    # Cleanup failures should not block publishing; state will expire via TTL.
+                    LOGGER.exception("Failed cleaning up aggregation state; correlation_id=%s", cid)
+                LOGGER.info("Published final aggregated result for CID: %s", cid)
 
-            # Ack the message regardless (we've recorded the progress in Redis)
+            # Ack only after any required final publish has succeeded.
             ch.basic_ack(delivery_tag=method.delivery_tag)
 
         except Exception as e:
             LOGGER.error("Error processing message: %s", e)
-            # Requeue if it's a transient error, or Nack to DLQ
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            # Requeue to retry: aggregation state is still present in Redis.
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
     def _publish_final(self, event: JobCompletedEvent, cid: str | None):
+        self._publish_returned = False
+        self._publish_return_reason = None
         properties = pika.BasicProperties(
             correlation_id=cid,
+            message_id=str(uuid.uuid4()),
             content_type="application/json",
             delivery_mode=2, # Persistent
+            priority=0,
+            headers={
+                "x-service-name": self._settings.service_name,
+            },
         )
-        self._channel.basic_publish(
+        published = self._channel.basic_publish(
             exchange=self._settings.egress_exchange,
             routing_key=self._settings.egress_routing_key,
             body=event.model_dump_json(by_alias=True, exclude_none=True),
-            properties=properties
+            properties=properties,
+            mandatory=True,
         )
+        if self._connection is not None:
+            self._connection.process_data_events(time_limit=0)
+        if published is False:
+            raise RuntimeError("Broker did not confirm the final publish (nack).")
+        if self._publish_returned:
+            raise RuntimeError(f"Final publish was unroutable: {self._publish_return_reason}")
 
     def run_forever(self) -> int:
         """Main event loop to connect, consume, and process messages."""
