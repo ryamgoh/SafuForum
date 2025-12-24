@@ -8,7 +8,7 @@ Full-stack forum app for local development: Next.js frontend + Spring Boot backe
 - Infra (docker-compose): Postgres, RabbitMQ, SeaweedFS (master/volume/filer/s3)
 
 ## Quickstart (Docker)
-1) Configure backend env vars in `SafuForumBackend/.env`:
+1) Configure backend env vars in `backend/.env`:
 ```bash
 # Database (only required if running backend outside Docker)
 DB_USERNAME=postgres
@@ -21,7 +21,7 @@ GOOGLE_CLIENT_SECRET=...
 # JWT
 JWT_SECRET=...
 ```
-(`SafuForumBackend/.env` is gitignored; don’t commit real secrets.)
+(`backend/.env` is gitignored; don’t commit real secrets.)
 
 2) Start the stack:
 ```bash
@@ -68,7 +68,7 @@ docker compose up -d postgres rabbitmq
 
 Run the backend:
 ```bash
-cd SafuForumBackend
+cd backend
 ./gradlew bootRun
 ```
 - If you want to use the Postgres DB created by Docker Compose, set `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/safuforum`.
@@ -76,12 +76,11 @@ cd SafuForumBackend
 
 Run the frontend:
 ```bash
-cd SafuForumFrontend
+cd frontend
 npm ci
 npm run dev
 ```
-- Recommended: set `NEXT_PUBLIC_API_URL=http://localhost:8081` (for example in `SafuForumFrontend/.env.local`).
-
+- Recommended: set `NEXT_PUBLIC_API_URL=http://localhost:8081` (for example in `frontend/.env.local`).
 ## Authentication (Google OAuth2)
 - Login entrypoint: `http://localhost:8081/oauth2/authorization/google`
 - Google Console redirect URI: `http://localhost:8081/login/oauth2/code/google`
@@ -97,9 +96,9 @@ npm run dev
   - `AWS_ACCESS_KEY_ID=dev AWS_SECRET_ACCESS_KEY=dev aws s3api --endpoint-url http://localhost:8333 list-buckets`
 
 ## Repo layout
-- `SafuForumFrontend/` – Next.js app
-- `SafuForumBackend/` – Spring Boot app (Flyway migrations in `src/main/resources/db/migration`)
-- `SafuForumBackend/schema.dbml` – database diagram (derived from Flyway migrations)
+- `services/frontend/` – Next.js app
+- `services/backend/` – Spring Boot app (Flyway migrations in `src/main/resources/db/migration`)
+- `services/backend/schema.dbml` – database diagram (derived from Flyway migrations)
 - `docker-compose.yml` – local stack orchestration
 - `ai/` – ML training artifacts/models (not used by the runtime app)
 - `apps/` – experiments/prototypes

@@ -44,7 +44,7 @@ services:
   # Backend (Spring Boot)
   backend:
     build:
-      context: ./SafuForumBackend
+      context: ./services/backend
       dockerfile: Dockerfile
     container_name: safuforum-backend
     restart: unless-stopped
@@ -60,7 +60,7 @@ services:
       SPRING_RABBITMQ_PASSWORD: guest
       SERVER_PORT: 8081
     env_file:
-      - ./SafuForumBackend/.env
+      - ./services/backend/.env
     depends_on:
       postgres:
         condition: service_healthy
@@ -153,7 +153,7 @@ services:
   # Frontend (Next.js)
   frontend:
     build:
-      context: ./SafuForumFrontend
+      context: ./services/frontend
       dockerfile: Dockerfile
     container_name: safuforum-frontend
     restart: unless-stopped
