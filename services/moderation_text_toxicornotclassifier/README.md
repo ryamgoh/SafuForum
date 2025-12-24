@@ -29,7 +29,7 @@ Consumes moderation text jobs from RabbitMQ and publishes moderation results.
 - `TOXIC_THRESHOLD` (default: `0.5`)
 - `RESULT_QUEUE_NAME` (default: `q.moderation.job.result`)
 
-Result messages preserve the incoming `correlationId`; `messageId` is a UUID (UUIDv5 by default, derived from `SERVICE_NAME` + `correlationId`).
+Result messages preserve the incoming `correlationId`; `messageId` is a random UUIDv4.
 
 This worker expects the classifier `toxic_logreg.joblib` plus the Word2Vec embeddings to be present at runtime (commonly mounted from `ai/toxicornot_textclassifier/results/`, which is gitignored).
 If `W2V_MODEL_PATH` is not set, it is inferred by scanning the `MODEL_ARTIFACTS_PATH` directory for a single `*.kv` (vectors) or `*.model` (full) file.

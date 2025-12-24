@@ -20,8 +20,13 @@ Consumes per-worker moderation result events from RabbitMQ and publishes a singl
 - `REDIS_HOST` (default: `redis`)
 
 ## Inbound result schema
-- Body fields are expected in `camelCase` (e.g. `moderationJobId`, `postId`, `postVersion`, `status`, `reason`).
-- The worker name is taken from the `x-service-name` AMQP header (preferred) or the body (`serviceName` / `service_name`).
+- AMQP properties:
+  - `correlation_id` (required): moderation job id
+- Headers:
+  - `x-service-name` (required): publishing service name
+- Body (JSON):
+  - `status` (required): `approved|rejected|failed`
+  - `reason` (optional): human/debug context
 
 ## Run
 - `uv run python -m app`
