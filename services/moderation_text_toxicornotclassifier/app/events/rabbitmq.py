@@ -48,9 +48,7 @@ def setup_topology(channel: pika.adapters.blocking_connection.BlockingChannel, s
 
 
 def _build_message_id(settings: Settings, *, correlation_id: str | None) -> str:
-    """Build a message ID based on the correlation ID (one-way encryption) or generate a new UUID."""
-    if correlation_id:
-        return str(uuid.uuid5(settings.message_id_namespace, f"{settings.service_name}:{correlation_id}"))
+    """Generate a message ID (correlation_id carries job identity)."""
     return str(uuid.uuid4())
 
 
@@ -67,6 +65,7 @@ def _publish_result(
         delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE,
         correlation_id=correlation_id,
         message_id=message_id,
+        priority=0,
         headers={
             "x-service-name": settings.service_name,
         },
@@ -156,7 +155,14 @@ class RabbitMQEventLoop:
         """
         incoming_correlation_id = None
         if properties is not None and properties.correlation_id:
-            incoming_correlation_id = str(properties.correlation_id)
+            raw_correlation_id = properties.correlation_id
+            if isinstance(raw_correlation_id, bytes):
+                try:
+                    raw_correlation_id = raw_correlation_id.decode("utf-8")
+                except Exception:
+                    raw_correlation_id = raw_correlation_id.decode("utf-8", errors="replace")
+            normalized = str(raw_correlation_id).strip()
+            incoming_correlation_id = normalized or None
 
         try:
             processed = self._event_service.handle_message(
@@ -173,9 +179,6 @@ class RabbitMQEventLoop:
             LOGGER.exception("Failed processing inbound event: %s", exc)
             processed = ProcessedEvent(
                 completion=ModerationJobCompletedEvent(
-                    moderation_job_id=None,
-                    post_id=None,
-                    post_version=None,
                     status="failed",
                     reason=str(exc),
                 ),
