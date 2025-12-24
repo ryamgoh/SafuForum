@@ -17,18 +17,38 @@ class ProcessedEvent:
 
 LOGGER = logging.getLogger(__name__)
 
+#
+# Idempotent aggregation update.
+#
 # KEYS[1] -> 'agg:{correlation_id}:count'
+# KEYS[2] -> 'agg:{correlation_id}:data'
 # ARGV[1] -> registry.current_count (the expected number of workers)
 # ARGV[2] -> expiry in seconds (e.g., 3600)
-LUA_INITIALIZE_AND_DECR = """
+# ARGV[3] -> service_name
+# ARGV[4] -> status
+#
+# Only decrements the counter when the (correlation_id, service_name) pair is first-seen.
+LUA_RECORD_RESULT_AND_DECR_IF_FIRST_SEEN = """
 local current = redis.call('get', KEYS[1])
 if not current then
     -- First time seeing this job: set the expected count from the Docker Registry
     redis.call('set', KEYS[1], ARGV[1])
-    redis.call('expire', KEYS[1], ARGV[2])
 end
--- Decrement and return the new value
-return redis.call('decr', KEYS[1])
+
+-- Keep both keys alive while results are arriving
+redis.call('expire', KEYS[1], ARGV[2])
+
+-- Record per-service status; HSET returns 1 only when the field is new
+local is_new = redis.call('hset', KEYS[2], ARGV[3], ARGV[4])
+redis.call('expire', KEYS[2], ARGV[2])
+
+if is_new == 1 then
+    -- First time seeing this service for the job: decrement and return new value
+    return redis.call('decr', KEYS[1])
+end
+
+-- Duplicate delivery for the same service: do not decrement
+return tonumber(redis.call('get', KEYS[1]))
 """
 
 
@@ -41,7 +61,7 @@ class EventService:
             decode_responses=True
         )
         # Pre-register the script for performance
-        self._lua_script = self.redis.register_script(LUA_INITIALIZE_AND_DECR)
+        self._lua_script = self.redis.register_script(LUA_RECORD_RESULT_AND_DECR_IF_FIRST_SEEN)
 
     def handle_message(
         self,
@@ -75,15 +95,13 @@ class EventService:
 
         # 1. Get the current snapshot of active workers from Docker API
         expected_workers = self.registry.current_count
-        
-        # 2. Atomic Update: Init if missing, then Decrement
-        # We pass 3600 as the TTL for the aggregation state
-        remaining = self._lua_script(keys=[count_key], args=[expected_workers, 3600])
 
-        # 3. Store this specific service's result data
-        # We use a hash to keep track of individual statuses for final decision
-        self.redis.hset(data_key, result.service_name, result.status)
-        self.redis.expire(data_key, 3600)
+        # 2. Atomic Update: init counter if missing, record per-service status,
+        # and only decrement when the service is first-seen for this correlation_id.
+        remaining = self._lua_script(
+            keys=[count_key, data_key],
+            args=[expected_workers, 3600, result.service_name, result.status],
+        )
 
         LOGGER.info("Job %s: %s services remaining", correlation_id, remaining)
 
