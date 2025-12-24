@@ -17,6 +17,8 @@ class ProcessedEvent:
 
 LOGGER = logging.getLogger(__name__)
 
+AGG_TTL_SECONDS = 3600
+
 #
 # Idempotent aggregation update.
 #
@@ -70,10 +72,18 @@ class EventService:
         *,
         service_name: str | None = None,
     ) -> Optional[JobCompletedEvent]:
+        if not correlation_id:
+            LOGGER.error("Dropping result event with no correlation_id")
+            return None
+        if not service_name:
+            LOGGER.error("Dropping result event with no x-service-name header; correlation_id=%s", correlation_id)
+            return None
+
         try:
             raw_data = json.loads(body.decode("utf-8"))
-            if isinstance(raw_data, dict) and service_name:
-                raw_data.setdefault("service_name", service_name)
+            if isinstance(raw_data, dict):
+                # service_name is authoritative from the AMQP header
+                raw_data["service_name"] = service_name
             result = ResultEvent.model_validate(raw_data)
         except Exception as e:
             LOGGER.error("Failed to parse inbound event: %s", e)
@@ -81,17 +91,16 @@ class EventService:
 
         correlation_id = str(correlation_id) if correlation_id else None
         if not correlation_id:
-            if result.moderation_job_id is None:
-                LOGGER.error("Dropping result event with no correlation_id or moderation_job_id")
-                return None
-            correlation_id = str(result.moderation_job_id)
+            return None
 
+        # Defensive: should always be set from the header
         if not result.service_name:
             LOGGER.error("Dropping result event with no service_name; correlation_id=%s", correlation_id)
             return None
 
         count_key = f"agg:{correlation_id}:count"
         data_key = f"agg:{correlation_id}:data"
+        final_key = f"agg:{correlation_id}:final"
 
         # 1. Get the current snapshot of active workers from Docker API
         expected_workers = self.registry.current_count
@@ -100,22 +109,36 @@ class EventService:
         # and only decrement when the service is first-seen for this correlation_id.
         remaining = self._lua_script(
             keys=[count_key, data_key],
-            args=[expected_workers, 3600, result.service_name, result.status],
+            args=[expected_workers, AGG_TTL_SECONDS, result.service_name, result.status],
         )
 
         LOGGER.info("Job %s: %s services remaining", correlation_id, remaining)
 
-        # 4. Finalize if we hit zero
+        # 4. Finalize if we hit zero (do NOT cleanup Redis state here; cleanup only after publish succeeds)
         if remaining == 0:
-            return self._finalize(correlation_id, data_key, result)
+            cached = self.redis.get(final_key)
+            if cached:
+                try:
+                    return JobCompletedEvent.model_validate_json(cached)
+                except Exception:
+                    LOGGER.warning("Ignoring invalid cached final event; correlation_id=%s", correlation_id)
+
+            final_event = self._build_final_event(correlation_id, data_key)
+            # Store a retryable copy for safety (TTL matches aggregation state).
+            self.redis.set(final_key, final_event.model_dump_json(exclude_none=True))
+            self.redis.expire(final_key, AGG_TTL_SECONDS)
+            return final_event
         
         return None
 
-    def _finalize(self, correlation_id: str, data_key: str, last_result: ResultEvent) -> JobCompletedEvent:
-        all_results = self.redis.hgetall(data_key)
-        self.redis.delete(data_key)  # Cleanup results hash
+    def cleanup(self, correlation_id: str) -> None:
         count_key = f"agg:{correlation_id}:count"
-        self.redis.delete(count_key)  # Cleanup counter key
+        data_key = f"agg:{correlation_id}:data"
+        final_key = f"agg:{correlation_id}:final"
+        self.redis.delete(data_key, count_key, final_key)
+
+    def _build_final_event(self, correlation_id: str, data_key: str) -> JobCompletedEvent:
+        all_results = self.redis.hgetall(data_key)
 
         # Logic: If any worker rejected, the whole post is rejected
         statuses = set(all_results.values())
@@ -127,9 +150,6 @@ class EventService:
             final_status = Status.FAILED
 
         return JobCompletedEvent(
-            moderation_job_id=last_result.moderation_job_id or correlation_id,
-            post_id=last_result.post_id,
-            post_version=last_result.post_version,
             status=final_status,
             reason=f"Aggregated from {len(all_results)} workers."
         )
