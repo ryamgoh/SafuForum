@@ -8,9 +8,8 @@ import com.SafuForumBackend.post.entity.Post;
 import com.SafuForumBackend.post.repository.PostRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.amqp.support.AmqpHeaders;
-import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,8 +41,12 @@ public class ModerationJobCompletedListener {
     @Transactional
     public void handleJobCompleted(
             ModerationJobCompletedEvent jobCompletionEvent,
-            @Header(name = AmqpHeaders.CORRELATION_ID, required = false) Object correlationId) {
-        Long jobId = resolveJobId(jobCompletionEvent, correlationId);
+            Message message) {
+        Object correlationId = null;
+        if (message != null && message.getMessageProperties() != null) {
+            correlationId = message.getMessageProperties().getCorrelationId();
+        }
+        Long jobId = resolveJobId(correlationId);
         if (jobId == null) {
             log.warn("Received moderation completion with no jobId/correlationId; ignoring");
             return;
@@ -135,14 +138,10 @@ public class ModerationJobCompletedListener {
     /**
      * Resolves the moderation job ID from the event or correlation ID.
      * 
-     * @param event
      * @param correlationId
      * @return
      */
-    private Long resolveJobId(ModerationJobCompletedEvent event, Object correlationId) {
-        if (event != null && event.moderationJobId() != null) {
-            return event.moderationJobId();
-        }
+    private Long resolveJobId(Object correlationId) {
         if (correlationId == null) {
             return null;
         }

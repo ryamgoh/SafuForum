@@ -25,11 +25,9 @@ class ResultEvent(BaseModel):
         extra="ignore",
     )
     service_name: str | None = Field(default=None, alias="serviceName")
-    moderation_job_id: str | int | None = Field(default=None, alias="moderationJobId")
-    post_id: int | None = Field(default=None, alias="postId")
-    post_version: int | None = Field(default=None, alias="postVersion")
     # Use Field with a default to make the validator's job easier
     status: Status = Field(default=Status.FAILED)
+    reason: str | None = None
 
     @field_validator("service_name", mode="before")
     @classmethod
@@ -55,9 +53,6 @@ class ResultEvent(BaseModel):
 class JobCompletedEvent(BaseModel):
     """Event representing the completion of a moderation job."""
     model_config = ConfigDict(frozen=True, populate_by_name=True, use_enum_values=True)
-    moderation_job_id: str | int | None = Field(default=None, alias="moderationJobId")
-    post_id: int | None = Field(default=None, alias="postId")
-    post_version: int | None = Field(default=None, alias="postVersion")
     # Using 'Status' (the Enum) is safer than 'str' for consistency
     status: Status
     reason: str

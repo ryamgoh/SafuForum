@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -129,16 +130,11 @@ public class ModerationOrchestratorService {
     private void publishJobRequestedEvent(ModerationJob job) {
         String routingKey = routingKeyFor(job.getContentType());
         ModerationJobRequestedEvent event = new ModerationJobRequestedEvent(
-                job.getId(),
-                job.getPost().getId(),
-                job.getPostVersion(),
-                job.getSourceField(),
-                job.getContentType(),
                 job.getPayload());
 
         rabbitTemplate.convertAndSend(amqpProperties.getIngressExchange(), routingKey, event, message -> {
             message.getMessageProperties().setCorrelationId(job.getId().toString());
-            message.getMessageProperties().setMessageId(job.getId().toString());
+            message.getMessageProperties().setMessageId(UUID.randomUUID().toString());
             return message;
         });
     }

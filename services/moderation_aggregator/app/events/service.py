@@ -17,18 +17,40 @@ class ProcessedEvent:
 
 LOGGER = logging.getLogger(__name__)
 
+AGG_TTL_SECONDS = 3600
+
+#
+# Idempotent aggregation update.
+#
 # KEYS[1] -> 'agg:{correlation_id}:count'
+# KEYS[2] -> 'agg:{correlation_id}:data'
 # ARGV[1] -> registry.current_count (the expected number of workers)
 # ARGV[2] -> expiry in seconds (e.g., 3600)
-LUA_INITIALIZE_AND_DECR = """
+# ARGV[3] -> service_name
+# ARGV[4] -> status
+#
+# Only decrements the counter when the (correlation_id, service_name) pair is first-seen.
+LUA_RECORD_RESULT_AND_DECR_IF_FIRST_SEEN = """
 local current = redis.call('get', KEYS[1])
 if not current then
     -- First time seeing this job: set the expected count from the Docker Registry
     redis.call('set', KEYS[1], ARGV[1])
-    redis.call('expire', KEYS[1], ARGV[2])
 end
--- Decrement and return the new value
-return redis.call('decr', KEYS[1])
+
+-- Keep both keys alive while results are arriving
+redis.call('expire', KEYS[1], ARGV[2])
+
+-- Record per-service status; HSET returns 1 only when the field is new
+local is_new = redis.call('hset', KEYS[2], ARGV[3], ARGV[4])
+redis.call('expire', KEYS[2], ARGV[2])
+
+if is_new == 1 then
+    -- First time seeing this service for the job: decrement and return new value
+    return redis.call('decr', KEYS[1])
+end
+
+-- Duplicate delivery for the same service: do not decrement
+return tonumber(redis.call('get', KEYS[1]))
 """
 
 
@@ -41,7 +63,7 @@ class EventService:
             decode_responses=True
         )
         # Pre-register the script for performance
-        self._lua_script = self.redis.register_script(LUA_INITIALIZE_AND_DECR)
+        self._lua_script = self.redis.register_script(LUA_RECORD_RESULT_AND_DECR_IF_FIRST_SEEN)
 
     def handle_message(
         self,
@@ -50,10 +72,18 @@ class EventService:
         *,
         service_name: str | None = None,
     ) -> Optional[JobCompletedEvent]:
+        if not correlation_id:
+            LOGGER.error("Dropping result event with no correlation_id")
+            return None
+        if not service_name:
+            LOGGER.error("Dropping result event with no x-service-name header; correlation_id=%s", correlation_id)
+            return None
+
         try:
             raw_data = json.loads(body.decode("utf-8"))
-            if isinstance(raw_data, dict) and service_name:
-                raw_data.setdefault("service_name", service_name)
+            if isinstance(raw_data, dict):
+                # service_name is authoritative from the AMQP header
+                raw_data["service_name"] = service_name
             result = ResultEvent.model_validate(raw_data)
         except Exception as e:
             LOGGER.error("Failed to parse inbound event: %s", e)
@@ -61,43 +91,54 @@ class EventService:
 
         correlation_id = str(correlation_id) if correlation_id else None
         if not correlation_id:
-            if result.moderation_job_id is None:
-                LOGGER.error("Dropping result event with no correlation_id or moderation_job_id")
-                return None
-            correlation_id = str(result.moderation_job_id)
+            return None
 
+        # Defensive: should always be set from the header
         if not result.service_name:
             LOGGER.error("Dropping result event with no service_name; correlation_id=%s", correlation_id)
             return None
 
         count_key = f"agg:{correlation_id}:count"
         data_key = f"agg:{correlation_id}:data"
+        final_key = f"agg:{correlation_id}:final"
 
         # 1. Get the current snapshot of active workers from Docker API
         expected_workers = self.registry.current_count
-        
-        # 2. Atomic Update: Init if missing, then Decrement
-        # We pass 3600 as the TTL for the aggregation state
-        remaining = self._lua_script(keys=[count_key], args=[expected_workers, 3600])
 
-        # 3. Store this specific service's result data
-        # We use a hash to keep track of individual statuses for final decision
-        self.redis.hset(data_key, result.service_name, result.status)
-        self.redis.expire(data_key, 3600)
+        # 2. Atomic Update: init counter if missing, record per-service status,
+        # and only decrement when the service is first-seen for this correlation_id.
+        remaining = self._lua_script(
+            keys=[count_key, data_key],
+            args=[expected_workers, AGG_TTL_SECONDS, result.service_name, result.status],
+        )
 
         LOGGER.info("Job %s: %s services remaining", correlation_id, remaining)
 
-        # 4. Finalize if we hit zero
+        # 4. Finalize if we hit zero (do NOT cleanup Redis state here; cleanup only after publish succeeds)
         if remaining == 0:
-            return self._finalize(correlation_id, data_key, result)
+            cached = self.redis.get(final_key)
+            if cached:
+                try:
+                    return JobCompletedEvent.model_validate_json(cached)
+                except Exception:
+                    LOGGER.warning("Ignoring invalid cached final event; correlation_id=%s", correlation_id)
+
+            final_event = self._build_final_event(correlation_id, data_key)
+            # Store a retryable copy for safety (TTL matches aggregation state).
+            self.redis.set(final_key, final_event.model_dump_json(exclude_none=True))
+            self.redis.expire(final_key, AGG_TTL_SECONDS)
+            return final_event
         
         return None
 
-    def _finalize(self, correlation_id: str, data_key: str, last_result: ResultEvent) -> JobCompletedEvent:
-        all_results = self.redis.hgetall(data_key)
-        self.redis.delete(data_key)  # Cleanup results hash
+    def cleanup(self, correlation_id: str) -> None:
         count_key = f"agg:{correlation_id}:count"
-        self.redis.delete(count_key)  # Cleanup counter key
+        data_key = f"agg:{correlation_id}:data"
+        final_key = f"agg:{correlation_id}:final"
+        self.redis.delete(data_key, count_key, final_key)
+
+    def _build_final_event(self, correlation_id: str, data_key: str) -> JobCompletedEvent:
+        all_results = self.redis.hgetall(data_key)
 
         # Logic: If any worker rejected, the whole post is rejected
         statuses = set(all_results.values())
@@ -109,9 +150,6 @@ class EventService:
             final_status = Status.FAILED
 
         return JobCompletedEvent(
-            moderation_job_id=last_result.moderation_job_id or correlation_id,
-            post_id=last_result.post_id,
-            post_version=last_result.post_version,
             status=final_status,
             reason=f"Aggregated from {len(all_results)} workers."
         )
