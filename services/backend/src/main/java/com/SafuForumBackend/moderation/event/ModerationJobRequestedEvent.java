@@ -1,13 +1,11 @@
 package com.SafuForumBackend.moderation.event;
 
-import com.SafuForumBackend.moderation.enums.JobContentType;
-
+/**
+ * Minimal job request payload sent to moderation workers.
+ *
+ * Job identity is carried via AMQP properties:
+ * - correlation_id = moderationJobId
+ */
 public record ModerationJobRequestedEvent(
-        Long moderationJobId,
-        Long postId,
-        Integer postVersion,
-        String sourceField,
-        JobContentType contentType,
         String payload
 ) {}
-

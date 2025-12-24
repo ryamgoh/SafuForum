@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import uuid
 from pathlib import Path
 from urllib.parse import quote
 
@@ -20,7 +19,6 @@ class Settings(BaseModel):
     result_exchange_type: str
     result_routing_key: str
     result_queue_name: str
-    message_id_namespace: uuid.UUID
     service_name: str
     toxic_threshold: float = Field(ge=0.0, le=1.0)
     model_artifacts_path: str
@@ -104,7 +102,6 @@ def load_settings() -> Settings:
             "result_exchange_type": _env("RESULT_EXCHANGE_TYPE", "direct"),
             "result_routing_key": _env("RESULT_ROUTING_KEY", "moderation.job.result"),
             "result_queue_name": _env("RESULT_QUEUE_NAME", "q.moderation.job.result"),
-            "message_id_namespace": _env("MESSAGE_ID_NAMESPACE", str(uuid.NAMESPACE_URL)),
             "service_name": _env("SERVICE_NAME", "toxicornotclassifier"),
             "toxic_threshold": _env("TOXIC_THRESHOLD", "0.5"),
             "model_artifacts_path": model_artifacts_path,
