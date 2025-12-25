@@ -47,10 +47,6 @@ result_exchange = RabbitExchange(
 async def base_handler(
     data: IngressMessageBody, cor_id: CorrelationId
 ) -> RabbitResponse:
-    print("Processing payload")
-    print(data.payload)
-    print(cor_id)
-    print("Payload processed")
     processed_body: ResultMessageBody = ResultMessageBody(
         status=ModerationStatus.APPROVED, reason="Processed successfully"
     )
@@ -58,6 +54,9 @@ async def base_handler(
     # Return a RabbitResponse to set headers and correlation_id declaratively
     return RabbitResponse(
         processed_body,
-        headers={"x-service-name": settings.service_name},
+        headers={
+            "x-service-name": settings.service_name,
+            "x-moderation-type": "image",
+        },
         correlation_id=cor_id,
     )
