@@ -127,6 +127,7 @@ services:
     restart: unless-stopped
     labels:
       - "domain=moderation"
+      - "moderation.type=image"
     volumes:
       - ./ai/catornot_imageclassifier/outputs:/model:ro
     depends_on:
@@ -159,6 +160,7 @@ services:
       TOXIC_THRESHOLD: 0.5
     labels:
       - "domain=moderation"
+      - "moderation.type=text"
     volumes:
       - ./ai/toxicornot_textclassifier/results:/model:ro
     depends_on:

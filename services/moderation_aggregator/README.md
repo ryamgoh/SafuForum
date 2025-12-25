@@ -24,9 +24,14 @@ Consumes per-worker moderation result events from RabbitMQ and publishes a singl
   - `correlation_id` (required): moderation job id
 - Headers:
   - `x-service-name` (required): publishing service name
+  - `x-moderation-type` (optional): `text|image|...` (when present, aggregator uses per-type Docker counts via label `moderation.type=<value>`)
 - Body (JSON):
   - `status` (required): `approved|rejected|failed`
   - `reason` (optional): human/debug context
 
 ## Run
 - `uv run python -m app`
+
+## Smoke test
+- Start RabbitMQ + Redis + aggregator + at least one moderation worker, then run:
+  - `uv run python scripts/smoke_roundtrip.py --routing-key moderation.job.image`

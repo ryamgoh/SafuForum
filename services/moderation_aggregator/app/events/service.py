@@ -71,6 +71,8 @@ class EventService:
         correlation_id: str | None,
         *,
         service_name: str | None = None,
+        moderation_type: str | None = None,
+        expected_workers: int | None = None,
     ) -> Optional[JobCompletedEvent]:
         if not correlation_id:
             LOGGER.error("Dropping result event with no correlation_id")
@@ -102,14 +104,26 @@ class EventService:
         data_key = f"agg:{correlation_id}:data"
         final_key = f"agg:{correlation_id}:final"
 
-        # 1. Get the current snapshot of active workers from Docker API
-        expected_workers = self.registry.current_count
+        # 1. Decide how many results we expect for this job.
+        # By default we count all running moderators, but when jobs are routed by content type
+        # (e.g., text vs image), we need a per-type count to avoid hanging forever.
+        resolved_expected_workers = expected_workers
+        if resolved_expected_workers is None:
+            resolved_expected_workers = self.registry.count_for_type(moderation_type)
+        if resolved_expected_workers < 1:
+            LOGGER.warning(
+                "Resolved expected_workers=%s (type=%s); forcing to 1; correlation_id=%s",
+                resolved_expected_workers,
+                moderation_type,
+                correlation_id,
+            )
+            resolved_expected_workers = 1
 
         # 2. Atomic Update: init counter if missing, record per-service status,
         # and only decrement when the service is first-seen for this correlation_id.
         remaining = self._lua_script(
             keys=[count_key, data_key],
-            args=[expected_workers, AGG_TTL_SECONDS, result.service_name, result.status],
+            args=[resolved_expected_workers, AGG_TTL_SECONDS, result.service_name, result.status],
         )
 
         LOGGER.info("Job %s: %s services remaining", correlation_id, remaining)
