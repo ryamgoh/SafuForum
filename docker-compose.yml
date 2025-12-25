@@ -118,6 +118,23 @@ services:
     networks:
       - safuforum-net
 
+  # Moderation image worker (catornotclassifier)
+  moderation-image-catornotclassifier:
+    build:
+      context: ./services/moderation_image_catornotclassifier
+      dockerfile: Dockerfile
+    container_name: safuforum-moderation-image-catornotclassifier
+    restart: unless-stopped
+    labels:
+      - "domain=moderation"
+    volumes:
+      - ./ai/catornot_imageclassifier/outputs:/model:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - safuforum-net
+
   # Moderation text worker (toxicornotclassifier)
   moderation-text-toxicornotclassifier:
     build:
