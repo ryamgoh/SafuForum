@@ -133,8 +133,8 @@ services:
       IMAGE_BUCKET: safu-forum-images
       MODEL_PATH: /model/model.pth
       TORCH_DEVICE: cpu
-      CAT_THRESHOLD: 0.5
-      NOT_CAT_THRESHOLD: 0.5
+      CAT_THRESHOLD: 0.8
+      NOT_CAT_THRESHOLD: 0.2
       MAX_IMAGE_BYTES: 10000000
       MAX_IMAGE_PIXELS: 40000000
     labels:
