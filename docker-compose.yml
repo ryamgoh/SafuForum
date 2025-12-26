@@ -125,6 +125,18 @@ services:
       dockerfile: Dockerfile
     container_name: safuforum-moderation-image-catornotclassifier
     restart: unless-stopped
+    environment:
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672/%2F
+      S3_URL: http://seaweed-s3:8333
+      S3_ACCESS_KEY_ID: dev
+      S3_SECRET_ACCESS_KEY: dev
+      IMAGE_BUCKET: safu-forum-images
+      MODEL_PATH: /model/model.pth
+      TORCH_DEVICE: cpu
+      CAT_THRESHOLD: 0.8
+      NOT_CAT_THRESHOLD: 0.2
+      MAX_IMAGE_BYTES: 10000000
+      MAX_IMAGE_PIXELS: 40000000
     labels:
       - "domain=moderation"
       - "moderation.type=image"

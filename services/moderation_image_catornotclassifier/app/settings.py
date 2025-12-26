@@ -29,13 +29,13 @@ class Settings(BaseSettings):
     
     # If set, only these buckets are allowed. Defaults to just `image_bucket`.
     allowed_buckets: list[str] = Field(default_factory=list, alias="ALLOWED_BUCKETS")
-    image_bucket: str = Field(default="moderation-images", alias="IMAGE_BUCKET")
+    image_bucket: str = Field(default="safu-forum-images", alias="IMAGE_BUCKET")
 
     # inference
-    model_path: str = Field(default="/app/models/model.pth", alias="MODEL_PATH")
+    model_path: str = Field(default="/model/model.pth", alias="MODEL_PATH")
     torch_device: str = Field(default="cpu", alias="TORCH_DEVICE")
-    cat_threshold: float = Field(default=0.8, alias="CAT_THRESHOLD")
-    not_cat_threshold: float = Field(default=0.2, alias="NOT_CAT_THRESHOLD")
+    cat_threshold: float = Field(default=0.5, alias="CAT_THRESHOLD")
+    not_cat_threshold: float = Field(default=0.5, alias="NOT_CAT_THRESHOLD")
 
     # Safety limits
     max_image_bytes: int = Field(default=10_000_000, alias="MAX_IMAGE_BYTES")

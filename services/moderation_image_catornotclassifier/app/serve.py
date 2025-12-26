@@ -23,6 +23,8 @@ from botocore.exceptions import ClientError, EndpointConnectionError, ReadTimeou
 logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
 
+Image.MAX_IMAGE_PIXELS = settings.max_image_pixels
+
 broker = RabbitBroker(str(settings.amqp_url))
 
 app = FastStream()
@@ -59,6 +61,11 @@ result_exchange = RabbitExchange(
     durable=True,
 )
 
+def _decode_image_bytes(image_bytes: bytes) -> Image.Image:
+    image = Image.open(io.BytesIO(image_bytes))
+    image.load()
+    return image.convert("RGB")
+
 
 @broker.subscriber(queue=ingress_queue, exchange=ingress_exchange)
 @broker.publisher(exchange=result_exchange, routing_key=settings.result_routing_key)
@@ -73,6 +80,12 @@ async def base_handler(
     try:
         bucket, key = parse_s3_locator(data.payload)
     except PayloadParseError as exc:
+        logger.warning(
+            "Moderation FAILED (bad payload) cid=%s payload=%r error=%s",
+            cor_id,
+            data.payload[:200],
+            str(exc),
+        )
         return RabbitResponse(
             ResultMessageBody(status=ModerationStatus.FAILED, reason=str(exc)),
             headers=headers,
@@ -81,6 +94,12 @@ async def base_handler(
 
     allowed_buckets = set(settings.allowed_buckets or [settings.image_bucket])
     if bucket not in allowed_buckets:
+        logger.warning(
+            "Moderation FAILED (bucket not allowed) cid=%s bucket=%s key=%s",
+            cor_id,
+            bucket,
+            key,
+        )
         return RabbitResponse(
             ResultMessageBody(
                 status=ModerationStatus.FAILED,
@@ -99,6 +118,13 @@ async def base_handler(
         )
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code", "ClientError")
+        logger.warning(
+            "Moderation FAILED (s3 error) cid=%s bucket=%s key=%s code=%s",
+            cor_id,
+            bucket,
+            key,
+            code,
+        )
         return RabbitResponse(
             ResultMessageBody(
                 status=ModerationStatus.FAILED,
@@ -108,9 +134,18 @@ async def base_handler(
             correlation_id=cor_id,
         )
     except (EndpointConnectionError, ReadTimeoutError):
-        logger.exception("Transient S3 error downloading %s/%s", bucket, key)
+        logger.exception(
+            "Transient S3 error cid=%s downloading %s/%s", cor_id, bucket, key
+        )
         raise
     except ValueError as exc:
+        logger.warning(
+            "Moderation FAILED (s3) cid=%s bucket=%s key=%s error=%s",
+            cor_id,
+            bucket,
+            key,
+            str(exc),
+        )
         return RabbitResponse(
             ResultMessageBody(status=ModerationStatus.FAILED, reason=str(exc)),
             headers=headers,
@@ -118,12 +153,16 @@ async def base_handler(
         )
 
     # Decode image with basic safety limits.
-    Image.MAX_IMAGE_PIXELS = settings.max_image_pixels
     try:
-        image = Image.open(io.BytesIO(image_bytes))
-        image.load()
-        image = image.convert("RGB")
+        image = await asyncio.to_thread(_decode_image_bytes, image_bytes)
     except (UnidentifiedImageError, OSError) as exc:
+        logger.warning(
+            "Moderation FAILED (invalid image) cid=%s bucket=%s key=%s error=%s",
+            cor_id,
+            bucket,
+            key,
+            type(exc).__name__,
+        )
         return RabbitResponse(
             ResultMessageBody(
                 status=ModerationStatus.FAILED,
@@ -133,6 +172,12 @@ async def base_handler(
             correlation_id=cor_id,
         )
     except Image.DecompressionBombError:
+        logger.warning(
+            "Moderation FAILED (decompression bomb) cid=%s bucket=%s key=%s",
+            cor_id,
+            bucket,
+            key,
+        )
         return RabbitResponse(
             ResultMessageBody(
                 status=ModerationStatus.FAILED,
@@ -145,14 +190,24 @@ async def base_handler(
     try:
         prediction = await asyncio.to_thread(img_predictor.predict, image)
     except (FileNotFoundError, ModelLoadError) as exc:
-        logger.exception("Model load/inference failure")
+        logger.exception(
+            "Model load/inference failure cid=%s bucket=%s key=%s",
+            cor_id,
+            bucket,
+            key,
+        )
         return RabbitResponse(
             ResultMessageBody(status=ModerationStatus.FAILED, reason=str(exc)[:200]),
             headers=headers,
             correlation_id=cor_id,
         )
     except Exception as exc:
-        logger.exception("Unhandled inference error")
+        logger.exception(
+            "Unhandled inference error cid=%s bucket=%s key=%s",
+            cor_id,
+            bucket,
+            key,
+        )
         return RabbitResponse(
             ResultMessageBody(
                 status=ModerationStatus.FAILED,
@@ -177,6 +232,18 @@ async def base_handler(
             status=ModerationStatus.FAILED,
             reason=f"Uncertain classification (p={prediction.probability:.4f})",
         )
+
+    logger.log(
+        logging.INFO
+        if processed_body.status != ModerationStatus.FAILED
+        else logging.WARNING,
+        "Moderation result cid=%s bucket=%s key=%s status=%s reason=%s",
+        cor_id,
+        bucket,
+        key,
+        processed_body.status.value,
+        processed_body.reason,
+    )
         
     # Return a RabbitResponse to set headers and correlation_id declaratively
     return RabbitResponse(

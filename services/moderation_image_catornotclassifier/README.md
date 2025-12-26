@@ -8,7 +8,7 @@ The trainer currently saves `ai/catornot_imageclassifier/outputs/model.pth` as a
 - keys: `epoch`, `model_state_dict`, `optimizer_state_dict`, `loss`
 - the worker loads `model_state_dict` into the `CatCNNModel` architecture (see `app/inference.py`)
 
-Recommended container mount: `/app/models/model.pth` (default `MODEL_PATH`).
+Recommended container mount: `/model/model.pth` (default `MODEL_PATH`).
 
 ### Key env vars
 
