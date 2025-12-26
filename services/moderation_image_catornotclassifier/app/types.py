@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from enum import Enum
 
 
@@ -9,9 +9,11 @@ class ModerationStatus(str, Enum):
     FAILED = "failed"
 
 class IngressMessageBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     payload: str
     
 class ResultMessageBody(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     status: ModerationStatus
     reason: str
     

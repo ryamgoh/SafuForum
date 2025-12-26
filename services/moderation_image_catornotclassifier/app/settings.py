@@ -1,13 +1,17 @@
-"""Application settings for the Moderation Aggregator Service."""
-from pydantic import AmqpDsn, Field, TypeAdapter
+"""Application settings for the cat-or-not moderation worker."""
+
+from pydantic import AmqpDsn, Field, TypeAdapter, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # Explicitly cast the string to the expected type
-AMQP_DEFAULT = TypeAdapter(AmqpDsn).validate_python("amqp://guest:guest@rabbitmq:5672/%2F")
+AMQP_DEFAULT = TypeAdapter(AmqpDsn).validate_python(
+    "amqp://guest:guest@rabbitmq:5672/%2F"
+)
 
 class Settings(BaseSettings):
-    """Application settings for the Moderation Aggregator Service."""
+    """Application settings for the cat-or-not moderation worker."""
+
     # Use Case-Insensitive environment variable lookup
     model_config = SettingsConfigDict(
         extra="ignore",
@@ -19,14 +23,23 @@ class Settings(BaseSettings):
     amqp_url: AmqpDsn = Field(default=AMQP_DEFAULT, alias="AMQP_URL")
 
     # S3 storage
-    s3_url: str = Field(default="http://seaweed-s3:8333")
-    s3_access_key_id: str = Field(default="dev")
-    s3_secret_access_key: str = Field(default="dev")
+    s3_url: str = Field(default="http://seaweed-s3:8333", alias="S3_URL")
+    s3_access_key_id: str = Field(default="dev", alias="S3_ACCESS_KEY_ID")
+    s3_secret_access_key: str = Field(default="dev", alias="S3_SECRET_ACCESS_KEY")
     
-    image_bucket: str = Field(default="moderation-images")
+    # If set, only these buckets are allowed. Defaults to just `image_bucket`.
+    allowed_buckets: list[str] = Field(default_factory=list, alias="ALLOWED_BUCKETS")
+    image_bucket: str = Field(default="moderation-images", alias="IMAGE_BUCKET")
 
     # inference
-    model_path: str = Field(default="/model/model.pth")
+    model_path: str = Field(default="/app/models/model.pth", alias="MODEL_PATH")
+    torch_device: str = Field(default="cpu", alias="TORCH_DEVICE")
+    cat_threshold: float = Field(default=0.8, alias="CAT_THRESHOLD")
+    not_cat_threshold: float = Field(default=0.2, alias="NOT_CAT_THRESHOLD")
+
+    # Safety limits
+    max_image_bytes: int = Field(default=10_000_000, alias="MAX_IMAGE_BYTES")
+    max_image_pixels: int = Field(default=40_000_000, alias="MAX_IMAGE_PIXELS")
 
 
     # Ingress Exchange Configuration
@@ -41,6 +54,30 @@ class Settings(BaseSettings):
     service_name: str = Field(default="catornotclassifier")
     log_level: str = Field(default="INFO")
 
+    @field_validator("allowed_buckets", mode="before")
+    @classmethod
+    def _parse_allowed_buckets(cls, value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            # Accept comma-separated env vars (e.g. "bucket-a,bucket-b").
+            return [part.strip() for part in stripped.split(",") if part.strip()]
+        return value
+
+    @model_validator(mode="after")
+    def _validate_thresholds_and_limits(self):
+        if not (0.0 <= self.not_cat_threshold <= self.cat_threshold <= 1.0):
+            raise ValueError(
+                "Invalid thresholds: require 0 <= NOT_CAT_THRESHOLD <= CAT_THRESHOLD <= 1"
+            )
+        if self.max_image_bytes <= 0:
+            raise ValueError("MAX_IMAGE_BYTES must be > 0")
+        if self.max_image_pixels <= 0:
+            raise ValueError("MAX_IMAGE_PIXELS must be > 0")
+        return self
 
 # Usage
 settings = Settings()
