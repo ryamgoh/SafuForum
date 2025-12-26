@@ -1,4 +1,5 @@
 from typing import Annotated
+import io
 
 from faststream import Context, FastStream
 from faststream.rabbit import (
@@ -10,13 +11,19 @@ from faststream.rabbit import (
 )
 
 from app.settings import settings
+from app.s3_handler import S3Handler
+from app.inference import ImagePredictor
 from app.types import IngressMessageBody, ResultMessageBody, ModerationStatus
+from PIL import Image
 
 
 broker = RabbitBroker(str(settings.amqp_url))
 
 app = FastStream()
 app.set_broker(broker)
+
+s3_handler = S3Handler()
+img_predictor = ImagePredictor(model_path=settings.model_path)
 
 CorrelationId = Annotated[str, Context("message.correlation_id")]
 
@@ -47,10 +54,34 @@ result_exchange = RabbitExchange(
 async def base_handler(
     data: IngressMessageBody, cor_id: CorrelationId
 ) -> RabbitResponse:
-    processed_body: ResultMessageBody = ResultMessageBody(
-        status=ModerationStatus.APPROVED, reason="Processed successfully"
-    )
+    
+    payload = data.payload.strip().lstrip("/")
+    bucket, key = payload.split("/", 1)  # bucket="safu-forum-images", key="uploads/uuid.jpg"
 
+    if bucket != settings.image_bucket:
+        raise ValueError(f"Invalid bucket: {bucket}")
+
+    # Download the image bytes from S3
+    image_bytes = await s3_handler.download_bytes(
+       bucket=bucket,
+       key=key 
+    )
+    
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    
+    prediction = img_predictor.predict(image)
+    
+    if prediction == 1:
+        # Image is classified as "cat"
+        processed_body: ResultMessageBody = ResultMessageBody(
+            status=ModerationStatus.REJECTED, reason="CAT detected"
+        )
+    else:       
+        # Image is classified as "not cat"
+        processed_body: ResultMessageBody = ResultMessageBody(
+            status=ModerationStatus.APPROVED, reason="Processed successfully"
+        )
+        
     # Return a RabbitResponse to set headers and correlation_id declaratively
     return RabbitResponse(
         processed_body,

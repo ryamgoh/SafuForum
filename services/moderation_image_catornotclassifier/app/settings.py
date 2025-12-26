@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Explicitly cast the string to the expected type
 AMQP_DEFAULT = TypeAdapter(AmqpDsn).validate_python("amqp://guest:guest@rabbitmq:5672/%2F")
+
 class Settings(BaseSettings):
     """Application settings for the Moderation Aggregator Service."""
     # Use Case-Insensitive environment variable lookup
@@ -16,6 +17,17 @@ class Settings(BaseSettings):
 
     # Use AmqpDsn for automatic URL validation (user, pass, host, port)
     amqp_url: AmqpDsn = Field(default=AMQP_DEFAULT, alias="AMQP_URL")
+
+    # S3 storage
+    s3_url: str = Field(default="http://seaweed-s3:8333")
+    s3_access_key_id: str = Field(default="dev")
+    s3_secret_access_key: str = Field(default="dev")
+    
+    image_bucket: str = Field(default="moderation-images")
+
+    # inference
+    model_path: str = Field(default="/model/model.pth")
+
 
     # Ingress Exchange Configuration
     ingress_exchange_name: str = Field(default="x.moderation.ingress", alias="INGRESS_EXCHANGE_NAME")
