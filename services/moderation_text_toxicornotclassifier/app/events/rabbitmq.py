@@ -68,6 +68,7 @@ def _publish_result(
         priority=0,
         headers={
             "x-service-name": settings.service_name,
+            "x-moderation-type": "text",
         },
     )
 

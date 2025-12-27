@@ -73,10 +73,31 @@ class RabbitMQEventLoop:
         if props is not None and props.headers:
             headers = props.headers
         service_name = self._coerce_header_value(self._get_header(headers, "x-service-name"))
+        moderation_type = self._coerce_header_value(self._get_header(headers, "x-moderation-type"))
+
+        expected_workers: int | None = None
+        expected_workers_raw = self._coerce_header_value(self._get_header(headers, "x-expected-workers"))
+        if expected_workers_raw:
+            try:
+                parsed = int(expected_workers_raw)
+                if parsed >= 1:
+                    expected_workers = parsed
+            except Exception:
+                LOGGER.warning(
+                    "Ignoring invalid x-expected-workers header=%r; correlation_id=%s",
+                    expected_workers_raw,
+                    cid,
+                )
 
         try:
             # Handle the logic via service
-            final_event = self._service.handle_message(body, cid, service_name=service_name)
+            final_event = self._service.handle_message(
+                body,
+                cid,
+                service_name=service_name,
+                moderation_type=moderation_type,
+                expected_workers=expected_workers,
+            )
 
             # Only publish if the aggregator has determined the job is fully complete
             if final_event:
