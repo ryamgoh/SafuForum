@@ -11,9 +11,8 @@ class ModerationStatus(str, Enum):
 class IngressMessageBody(BaseModel):
     model_config = ConfigDict(extra="ignore")
     payload: str
-    
+
 class ResultMessageBody(BaseModel):
     model_config = ConfigDict(extra="ignore")
     status: ModerationStatus
     reason: str
-    
